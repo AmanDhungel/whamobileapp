@@ -1,10 +1,12 @@
 import { router, useLocalSearchParams } from "expo-router";
+import { useState } from "react";
 import { Linking, StyleSheet, View } from "react-native";
 
 import { ApiError } from "@/api/errors";
 import type { EventDetail, EventHost } from "@/api/types";
 import {
   Avatar,
+  CheckoutChoiceSheet,
   Badge,
   Button,
   Card,
@@ -28,7 +30,6 @@ import {
 } from "@/components";
 import { useEvent } from "@/hooks/queries/browse";
 import { useAccountArea } from "@/store/authStore";
-import { requestLogin } from "@/store/loginPromptStore";
 import { theme, useTheme } from "@/theme";
 import { getEventAvailability } from "@/utils/eventStatus";
 import { formatDateRange, formatPrice, formatTimeRange, titleCase } from "@/utils/format";
@@ -80,6 +81,7 @@ export default function EventDetailScreen() {
   const slug = normalizeEventSlug(params.slug);
   const query = useEvent(slug);
   const area = useAccountArea();
+  const [choiceOpen, setChoiceOpen] = useState(false);
 
   if (query.isPending) {
     return (
@@ -134,7 +136,7 @@ export default function EventDetailScreen() {
             if (area === "customer") {
               router.push({ pathname: "/checkout/[slug]", params: { slug: event.slug ?? slug } });
             } else {
-              requestLogin("Log in to buy tickets");
+              setChoiceOpen(true); // log in, or continue as a guest
             }
           },
         };
@@ -324,6 +326,22 @@ export default function EventDetailScreen() {
           onPress={action.onPress}
         />
       </StickyActionBar>
+
+      <CheckoutChoiceSheet
+        visible={choiceOpen}
+        onClose={() => setChoiceOpen(false)}
+        onLogin={() => {
+          setChoiceOpen(false);
+          router.push({ pathname: "/login", params: { type: "user" } });
+        }}
+        onGuest={() => {
+          setChoiceOpen(false);
+          router.push({
+            pathname: "/checkout/[slug]",
+            params: { slug: event.slug ?? slug, guest: "1" },
+          });
+        }}
+      />
     </View>
   );
 }

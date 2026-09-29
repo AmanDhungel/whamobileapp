@@ -7,3 +7,4 @@ export { PromoCodeField } from "./PromoCodeField";
 export { StepIndicator, type CheckoutStepDef } from "./StepIndicator";
 export { TicketQuantityRow } from "./TicketQuantityRow";
 export { PendingPurchaseNotice } from "./PendingPurchaseNotice";
+export { CheckoutChoiceSheet } from "./CheckoutChoiceSheet";
