@@ -9,6 +9,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { queryClient } from "@/api/queryClient";
 import { LoginPromptSheet, ToastHost } from "@/components";
 import { ConfigErrorScreen } from "@/components/ConfigErrorScreen";
+import { usePendingPurchaseRecovery } from "@/hooks/usePendingPurchaseRecovery";
 import { PaymentsProvider } from "@/services/payments";
 import { useAccountArea, useAuthStore } from "@/store/authStore";
 import { fontAssets, theme } from "@/theme";
@@ -74,6 +75,10 @@ export default function RootLayout() {
  */
 function RootNavigator() {
   const area = useAccountArea();
+  const userId = useAuthStore((s) => s.user?.id);
+
+  // Paid-but-unfinalized ticket orders are retried at start and after each login.
+  usePendingPurchaseRecovery(userId ?? "public");
 
   return (
     <Stack
@@ -97,6 +102,9 @@ function RootNavigator() {
         <Stack.Screen name="activity/tickets/[id]" />
         <Stack.Screen name="favorites" />
         <Stack.Screen name="profile/edit" />
+        {/* Ticket checkout — signed-in customers and guests. */}
+        <Stack.Screen name="checkout/[slug]" />
+        <Stack.Screen name="checkout/success" />
       </Stack.Protected>
 
       {/* Login/signup: reachable from any "Log in" entry point while logged out. On

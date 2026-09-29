@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Linking, StyleSheet, View } from "react-native";
 
 import { ApiError } from "@/api/errors";
@@ -27,6 +27,8 @@ import {
   showToast,
 } from "@/components";
 import { useEvent } from "@/hooks/queries/browse";
+import { useAccountArea } from "@/store/authStore";
+import { requestLogin } from "@/store/loginPromptStore";
 import { theme, useTheme } from "@/theme";
 import { getEventAvailability } from "@/utils/eventStatus";
 import { formatDateRange, formatPrice, formatTimeRange, titleCase } from "@/utils/format";
@@ -70,13 +72,14 @@ function EventDetailSkeleton() {
 }
 
 /**
- * ~ web /events/[slug] (components/Event/SingleEventPage.tsx). Checkout isn't in this
- * phase: "Get tickets" / "Register" show "Coming soon"; external events open their link.
+ * ~ web /events/[slug] (components/Event/SingleEventPage.tsx). Paid events open the
+ * ticket checkout; external events open their ticket link.
  */
 export default function EventDetailScreen() {
   const params = useLocalSearchParams<{ slug: string }>();
   const slug = normalizeEventSlug(params.slug);
   const query = useEvent(slug);
+  const area = useAccountArea();
 
   if (query.isPending) {
     return (
@@ -127,7 +130,13 @@ export default function EventDetailScreen() {
             availability.fromPrice !== null
               ? `From ${formatPrice(availability.fromPrice)}`
               : undefined,
-          onPress: () => showToast({ type: "info", message: COMING_SOON }),
+          onPress: () => {
+            if (area === "customer") {
+              router.push({ pathname: "/checkout/[slug]", params: { slug: event.slug ?? slug } });
+            } else {
+              requestLogin("Log in to buy tickets");
+            }
+          },
         };
   } else if (event.price_category === "external") {
     action = {

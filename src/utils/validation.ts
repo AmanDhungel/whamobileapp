@@ -122,3 +122,14 @@ export const contactDetailsSchema = z.object({
   longitude: z.number().optional(),
 });
 export type ContactDetailsValues = z.infer<typeof contactDetailsSchema>;
+
+// Guest checkout details — components/Stripe/EventCheckOut.tsx handleContinueFromDetails
+// (inline validation, not zod on the web; same rules + copy). The web checks name/phone
+// first, then the email regex; also used by the "Confirm your details" recovery form.
+const GUEST_REQUIRED = "Please enter your full name and phone number.";
+export const guestDetailsSchema = z.object({
+  name: z.string().trim().min(1, GUEST_REQUIRED),
+  email: z.string().trim().regex(EMAIL_RE, "Please enter a valid email address."),
+  phone: z.string().trim().min(1, GUEST_REQUIRED),
+});
+export type GuestDetailsValues = z.infer<typeof guestDetailsSchema>;

@@ -71,3 +71,6 @@ export {
 } from "./browse/BusinessResults";
 export { DealResults } from "./browse/DealResults";
 export { EventResults } from "./browse/EventResults";
+
+// Checkout (Phase C)
+export * from "./checkout";

@@ -145,3 +145,9 @@ export function shortLocation(location?: string | null, parts = 2): string {
     .filter(Boolean)
     .join(", ");
 }
+
+/** Seconds → "MM:SS" (web hold banner: padStart(2) minutes and seconds). */
+export function formatCountdown(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  return `${pad2(Math.floor(s / 60))}:${pad2(s % 60)}`;
+}
