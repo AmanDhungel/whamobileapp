@@ -680,3 +680,22 @@ export interface TicketPurchaseResponse {
   signedIn: boolean;
   receipt: PurchaseReceipt;
 }
+
+// ─── Free event registration (POST/GET /api/event/redeem, bearer OK) ─────────────
+
+export interface RegisterForEventResponse {
+  success: boolean;
+  /** "Ticket generated! Check your email." */
+  message: string;
+  /** "WHA-EVT-XXXXXXXX" — also shown as a QR in My tickets. */
+  uniqueKey: string;
+}
+
+/** GET /api/event/redeem → { data: EventRegistration[] } for the current user. */
+export interface EventRegistration {
+  _id: ObjectId;
+  event: EventSummary | ObjectId;
+  uniqueKey: string;
+  status: TicketStatus;
+  createdAt?: ISODateString;
+}

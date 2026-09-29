@@ -26,18 +26,17 @@ import {
   TicketOptionRow,
   openBusiness,
   shareLink,
-  showToast,
 } from "@/components";
 import { useEvent } from "@/hooks/queries/browse";
+import { useIsRegistered, useRegisterForEvent } from "@/hooks/queries/registrations";
 import { useAccountArea } from "@/store/authStore";
+import { requestLogin } from "@/store/loginPromptStore";
 import { theme, useTheme } from "@/theme";
 import { getEventAvailability } from "@/utils/eventStatus";
 import { formatDateRange, formatPrice, formatTimeRange, titleCase } from "@/utils/format";
 import { htmlToText, splitLines } from "@/utils/html";
 import { webUrls } from "@/utils/links";
 import { normalizeEventSlug } from "@/utils/slug";
-
-const COMING_SOON = "Coming soon — in-app tickets arrive in the next update.";
 
 function hostOf(event: EventDetail): EventHost | null {
   return typeof event.user === "object" && event.user ? event.user : null;
@@ -82,6 +81,8 @@ export default function EventDetailScreen() {
   const query = useEvent(slug);
   const area = useAccountArea();
   const [choiceOpen, setChoiceOpen] = useState(false);
+  const isRegistered = useIsRegistered(query.data?._id ?? "");
+  const register = useRegisterForEvent(slug);
 
   if (query.isPending) {
     return (
@@ -149,13 +150,34 @@ export default function EventDetailScreen() {
       },
     };
   } else {
-    action = availability.registrationFull
-      ? { label: "Fully Booked", disabled: true, onPress: () => undefined }
-      : {
-          label: "Register",
-          caption: "Free event",
-          onPress: () => showToast({ type: "info", message: COMING_SOON }),
-        };
+    // Free registration (web priority): Already Registered → Fully Booked → Processing → Register.
+    const spotsLeft =
+      availability.showRemaining && availability.registrationRemaining !== null
+        ? `${availability.registrationRemaining} spot${availability.registrationRemaining === 1 ? "" : "s"} left`
+        : undefined;
+    if (isRegistered) {
+      action = {
+        label: "Already Registered",
+        caption: "Your ticket is in My tickets",
+        disabled: true,
+        onPress: () => undefined,
+      };
+    } else if (availability.registrationFull) {
+      action = { label: "Fully Booked", disabled: true, onPress: () => undefined };
+    } else {
+      action = {
+        label: register.isPending ? "Processing..." : "Register",
+        caption: spotsLeft ?? "Free event",
+        disabled: register.isPending,
+        onPress: () => {
+          if (area !== "customer") {
+            requestLogin("Please login to get your ticket");
+            return;
+          }
+          register.mutate(event._id);
+        },
+      };
+    }
   }
 
   return (
