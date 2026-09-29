@@ -88,7 +88,8 @@ async function send<T>(
   opts: RequestOptions,
   accessToken: string | undefined,
 ): Promise<ApiResult<T>> {
-  const headers: Record<string, string> = { Accept: "application/json" };
+  // X-Client lets the backend tell app traffic apart (e.g. to stop setting web cookies).
+  const headers: Record<string, string> = { Accept: "application/json", "X-Client": "mobile" };
   let body: BodyInit | undefined;
 
   if (opts.body instanceof FormData) {
@@ -111,6 +112,8 @@ async function send<T>(
       headers,
       body,
       signal: controller.signal,
+      // Bearer tokens only — never send or accept website session cookies (see services/cookies).
+      credentials: "omit",
     });
   } catch (err) {
     if (opts.signal?.aborted) throw err; // caller cancelled — not a network error

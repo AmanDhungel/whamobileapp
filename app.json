@@ -53,7 +53,15 @@
         {
           "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location to find businesses and events near you."
         }
-      ]
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "enableGooglePay": true
+        }
+      ],
+      "expo-sharing",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true

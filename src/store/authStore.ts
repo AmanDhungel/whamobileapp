@@ -16,6 +16,7 @@ import {
 } from "@/api/tokenStorage";
 import type { AccountCategory, AuthSession, AuthUser } from "@/api/types";
 import { showToast } from "@/components/Toast";
+import { clearApiCookies } from "@/services/cookies";
 
 // Removed in Phase B (guest browsing is no longer a mode — browsing is public).
 // Cleaned up on restore for installs that still have it.
@@ -111,6 +112,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   clearLocalSession: async () => {
     await clearSession();
+    await clearApiCookies();
     dropPrivateQueries();
     set({ status: "signedOut", user: null });
   },
