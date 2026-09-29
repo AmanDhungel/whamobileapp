@@ -1,0 +1,228 @@
+### Mobile Auth Phase 1 — functional test script
+### NOT YET RUN. Waiting on confirmation that the configured MONGODB_URL host is
+### safe to test against before this executes. Use throwaway accounts only
+### (mobile-test+<timestamp>@invalid) — never real user data.
+###
+### Run against a local dev server: `npm run dev`, then use the VS Code REST Client
+### extension (or any .http-compatible tool) against @baseUrl below.
+
+@baseUrl = http://localhost:3000
+@testEmail = mobile-test+{{$timestamp}}@invalid
+@testPassword = TestPassw0rd!
+
+### 1. Send signup verification code (existing, unchanged endpoint — reused as-is)
+POST {{baseUrl}}/api/auth/send-verification-code
+Content-Type: application/json
+
+{
+  "email": "{{testEmail}}"
+}
+
+### 2. Verify the code manually (read it from Mailtrap / server logs, paste below)
+POST {{baseUrl}}/api/auth/verify-signup-code
+Content-Type: application/json
+
+{
+  "email": "{{testEmail}}",
+  "code": "REPLACE_WITH_CODE_FROM_EMAIL"
+}
+
+### 3. Register via mobile — multipart/form-data
+# (send as multipart in your REST client: category=user, name, email, password,
+#  accpetalltermsandcondition=true, deviceId=test-device-1, platform=ios)
+POST {{baseUrl}}/api/mobile/v1/auth/register
+Content-Type: multipart/form-data; boundary=----boundary
+
+------boundary
+Content-Disposition: form-data; name="category"
+
+user
+------boundary
+Content-Disposition: form-data; name="name"
+
+Mobile Test
+------boundary
+Content-Disposition: form-data; name="email"
+
+{{testEmail}}
+------boundary
+Content-Disposition: form-data; name="password"
+
+{{testPassword}}
+------boundary
+Content-Disposition: form-data; name="accpetalltermsandcondition"
+
+true
+------boundary
+Content-Disposition: form-data; name="deviceId"
+
+test-device-1
+------boundary
+Content-Disposition: form-data; name="platform"
+
+ios
+------boundary--
+
+### Expect: { data: { accessToken, refreshToken, expiresIn, user }, error: null, meta: null }
+### Save refreshToken from the response as @refreshToken1 below.
+
+### 4. Login (should also succeed independently of register)
+POST {{baseUrl}}/api/mobile/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{testEmail}}",
+  "password": "{{testPassword}}",
+  "category": "user",
+  "deviceId": "test-device-1",
+  "platform": "ios"
+}
+
+### Expect: 200, { data: { accessToken, refreshToken, expiresIn, user } }
+### Save this response's accessToken as @accessToken and refreshToken as @refreshToken.
+
+@refreshToken = PASTE_FROM_STEP_4
+@accessToken = PASTE_FROM_STEP_4
+
+### 5. GET /me with bearer token
+GET {{baseUrl}}/api/mobile/v1/me
+Authorization: Bearer {{accessToken}}
+
+### Expect: 200, { data: { user } } matching the login response's user object.
+
+### 6. Refresh
+POST {{baseUrl}}/api/mobile/v1/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+### Expect: 200, a NEW accessToken + refreshToken pair.
+### Save the new refreshToken as @refreshTokenAfterRotation.
+
+### 7. RACING REFRESH — call the SAME (now-old, step 4's) refreshToken again,
+### twice, back-to-back, within 30 seconds of step 6. This simulates two racing
+### refresh calls off the same stale token.
+POST {{baseUrl}}/api/mobile/v1/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+###
+POST {{baseUrl}}/api/mobile/v1/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+### Expect: BOTH calls in step 7 succeed (each returns its own new pair — grace-window
+### sibling issuance), AND the pair from step 6 (@refreshTokenAfterRotation) STILL
+### works afterward (test with step 8 below). All three refresh tokens issued across
+### steps 6-7 should be independently valid siblings at this point.
+
+### 8. Confirm step 6's rotated pair is still valid (not touched by step 7's siblings)
+POST {{baseUrl}}/api/mobile/v1/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "PASTE_refreshTokenAfterRotation_FROM_STEP_6"
+}
+
+### Expect: 200, succeeds normally.
+
+### 9. REUSE OUTSIDE GRACE WINDOW — wait 35+ seconds, then reuse the ORIGINAL
+### step-4 token (@refreshToken) again.
+POST {{baseUrl}}/api/mobile/v1/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+### Expect: 401. AND every other token issued for this user (steps 6, 7, 8's results)
+### should now also be rejected — confirm by retrying step 8's refresh call again:
+### it should now 401 too (whole family revoked).
+
+### 10. Logout
+POST {{baseUrl}}/api/mobile/v1/auth/logout
+Content-Type: application/json
+
+{
+  "refreshToken": "PASTE_A_CURRENTLY_VALID_REFRESH_TOKEN"
+}
+
+### Expect: 200 { data: { success: true } }. Re-running refresh with that same token
+### should now 401.
+
+### 11. Login while blocked — manually set isblocked:true on the test account in
+### Mongo first (Compass or mongosh), then:
+POST {{baseUrl}}/api/mobile/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{testEmail}}",
+  "password": "{{testPassword}}",
+  "category": "user"
+}
+
+### Expect: 403 "This account has been blocked". Unset isblocked before continuing.
+
+### 12. DELETE /me, then confirm login/refresh/social all reject afterward
+DELETE {{baseUrl}}/api/mobile/v1/me
+Authorization: Bearer {{accessToken}}
+
+### Expect: 200 { data: { success: true } }.
+### Then re-run step 4 (login) with the SAME original email/password — expect
+### "Invalid email or password" (since the email field was overwritten with
+### deleted+<id>@invalid). Confirm in Mongo the document's email is now that
+### placeholder, googleId/appleId/password are unset, and deletedAt is set.
+
+### 13. /auth/social with a garbage token (must reject, never crash)
+POST {{baseUrl}}/api/mobile/v1/auth/social
+Content-Type: application/json
+
+{
+  "idToken": "not-a-real-token",
+  "provider": "google"
+}
+
+### Expect: 401 "Invalid or expired social sign-in token".
+
+### 14. Fail-closed config check — temporarily unset MOBILE_JWT_SECRET in .env,
+### restart the dev server, then:
+POST {{baseUrl}}/api/mobile/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{testEmail}}",
+  "password": "{{testPassword}}",
+  "category": "user"
+}
+
+### Expect: 500 with a clear "Server misconfigured: MOBILE_JWT_SECRET is not set"
+### message — never a silent/unsigned token, never a 200. Restore MOBILE_JWT_SECRET
+### and restart before continuing.
+
+### 15. Each swapped consumer route, tested TWICE — once with a real web session
+### cookie (log in via the browser first, copy the next-auth.session-token cookie
+### into a Cookie header here), once with a bearer token from step 4. Both must
+### behave identically to how they did before this phase.
+GET {{baseUrl}}/api/tickets
+Authorization: Bearer {{accessToken}}
+
+###
+GET {{baseUrl}}/api/tickets
+Cookie: next-auth.session-token=PASTE_WEB_SESSION_COOKIE_HERE
+
+### Repeat the same pair of calls for: GET/POST /api/favroite, POST /api/review,
+### PATCH /api/review/edit/:id, POST /api/review/delete/:id, POST /api/event/redeem,
+### GET /api/user/profile, PATCH /api/user/update, and (with a real event/cart) the
+### three event/ticket/{purchase,hold,hold/release} routes' guest-allowed paths (no
+### Authorization header at all, confirm they still work as a true guest).
+
+### 16. Rate-limit check — call register or guest 11+ times in under 10 minutes from
+### the same IP; the 11th call should 429 "Too many registration attempts...".
