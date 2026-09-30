@@ -76,6 +76,12 @@ export const usePendingPurchaseStore = create<PendingPurchaseState>()((set, get)
   },
 }));
 
+export function pendingPurchaseById(paymentIntentId: string): PendingPurchase | undefined {
+  return usePendingPurchaseStore
+    .getState()
+    .pending.find((p) => p.paymentIntentId === paymentIntentId);
+}
+
 export function pendingPurchaseForEvent(eventId: string): PendingPurchase | undefined {
   return usePendingPurchaseStore.getState().pending.find((p) => p.eventId === eventId);
 }

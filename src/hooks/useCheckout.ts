@@ -22,7 +22,11 @@ import { showToast } from "@/components/Toast";
 import { stripeReturnURL, walletPayments } from "@/services/payments";
 import { useAuthStore } from "@/store/authStore";
 import { useCheckoutResultStore } from "@/store/checkoutResultStore";
-import { pendingPurchaseForEvent, usePendingPurchaseStore } from "@/store/pendingPurchaseStore";
+import {
+  pendingPurchaseById,
+  pendingPurchaseForEvent,
+  usePendingPurchaseStore,
+} from "@/store/pendingPurchaseStore";
 import { env } from "@/utils/env";
 import { getEventAvailability } from "@/utils/eventStatus";
 
@@ -214,6 +218,11 @@ export function useCheckout({ event, isGuest, onPurchased, onExit }: UseCheckout
       await placeHold(res);
       setStep("checkout");
     } catch (err) {
+      // A re-price releases the previous hold server-side even when it fails.
+      if (pricing) {
+        releasedRef.current = pricing.paymentIntentId;
+        setHoldExpiresAt(null);
+      }
       setError(getErrorMessage(err, "Those tickets are no longer available"));
       setStep("tickets");
     } finally {
@@ -297,7 +306,16 @@ export function useCheckout({ event, isGuest, onPurchased, onExit }: UseCheckout
 
   // ── Finalize (idempotent) ─────────────────────────────────────────────────────────
   const finalize = async (paymentIntentId: string, info: GuestInfo | null) => {
-    const signedInCustomer = useAuthStore.getState().status === "signedIn" && !isGuest;
+    // Finalize as the signed-in buyer only if this order is theirs: a guest order (or one
+    // paid by a different account) must never be attached to whoever is signed in now —
+    // the server prefers the bearer identity over guestInfo.
+    const auth = useAuthStore.getState();
+    const pending = pendingPurchaseById(paymentIntentId);
+    const signedInCustomer =
+      auth.status === "signedIn" &&
+      !isGuest &&
+      !pending?.guestInfo &&
+      (!pending?.buyerUserId || pending.buyerUserId === auth.user?.id);
     setBusy("finalizing");
     try {
       const res = await finalizePurchase(
