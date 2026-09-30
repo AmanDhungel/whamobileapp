@@ -587,3 +587,100 @@ tokens.
 all of `/api/bookings/*` (incl. `GET /api/bookings/user`, lock, create),
 `/api/services*`, `/api/notifications*`, `/api/categories`, `POST /api/delete-profile`
 (the app uses `DELETE /api/mobile/v1/me`), `GET /api/event/ticket/purchase` (business).
+
+---
+
+## Phase C — checkout contract as implemented (mobile app, 2026-09-30)
+
+Read from the website repo at `e513aef` (clean tree). Supersedes the older notes above
+where they differ.
+
+### Ticket checkout sequence (same as the web `EventCheckOut.tsx`)
+1. `POST /api/mobile/v1/event/ticket/price` (guests allowed; bearer optional, used only for
+   rate-limit keying — 30/min per user or IP). Body `{ eventId, items:[{optionId,quantity}],
+   promoCode?, previousPaymentIntentId? }`. Returns (envelope `data`) `{ clientSecret,
+   paymentIntentId, invoiceNumber, items:[{optionId,name,quantity,unitPrice,originalPrice,
+   discounted}], ticketTotal, serviceFee, surcharge, totalToPay, promoApplied }` — amounts are
+   **unrounded floats**. Every call creates a **new** PaymentIntent (AUD, no customer, no
+   `automatic_payment_methods`) and a **new** invoice number (the web keeps its number on
+   re-price; mobile can't). The previous PaymentIntent is never cancelled.
+   `previousPaymentIntentId` → its hold is released **first, with no ownership check,
+   even if validation then fails**. Errors: all status 400, `code: null` (incl. Stripe/DB
+   failures): "Event not found", "This event is not a paid event", "Select at least one
+   ticket", "You can book a maximum of N tickets per request", "Promo code is not valid",
+   "Promo code usage limit has been reached", "Quantity must be at least 1", "Ticket option
+   not found", "`X` is not released yet", "`X` is no longer available", "Only N `X` ticket(s)
+   available right now", "`X` tickets are not available right now". A valid promo that
+   matches nothing in the cart → `promoApplied:false`, no error.
+2. `POST /api/event/ticket/hold` (getAuthUser; guests allowed) `{ eventId, items,
+   paymentIntentId }` → `{ success, expiresAt }` (5 min). Idempotent per PaymentIntent (does
+   not reset the timer). The hold records the signed-in user. Errors 400 `{ error }` incl. raw
+   `EVENT_NOT_FOUND` / `OPTION_NOT_FOUND`. Does not validate quantity ≥ 1, the per-request
+   cap, or that items match the PaymentIntent.
+3. Stripe PaymentSheet with the `clientSecret`.
+4. `POST /api/event/ticket/purchase` (getAuthUser; guests allowed) `{ eventId,
+   paymentIntentId, guestInfo? }` — idempotent per PaymentIntent (checked first; replays
+   return `signedIn:false`, `holderName:"Ticket Holder"`). Signed-in → buyer = account,
+   `guestInfo` ignored. Otherwise `guestInfo` required: 400 `{ error, code:
+   "GUEST_INFO_REQUIRED" }` — note an **expired bearer token lands here, not on a 401**.
+   Guest buyer: matched by email to an existing account (never auto-signed-in if it has a
+   password). Response `{ success, purchaseId, invoiceNumber, items:[{optionName,codes}],
+   signedIn, receipt:{ holderName, event:{title,image,venue,location,dateRange,latitude,
+   longitude,slug,startTime,endTime}, items:[{optionName,uniqueKeys,quantity,unitPrice}],
+   invoiceNumber, ticketTotal, serviceFee, surcharge, totalAmount, promoCode, createdAt } }`.
+   For new passwordless guests it sets a **NextAuth session cookie** (`signedIn:true`) — no
+   mobile tokens are ever returned. Refund-worthy failures (no `code`): "One or more selected
+   tickets are no longer available. Please contact support for a refund.", "The promo code is
+   no longer available. Please contact support for a refund.", "Payment amount mismatch".
+   Other errors → 500.
+5. Release: `POST /api/event/ticket/hold/release` `{ paymentIntentId }` → `{ success }`.
+   Guest holds: anyone with the id. **Holds created while signed in: only that same user**
+   (403 `{ message: "Unauthorized" }` otherwise — including an expired token). Unknown hold
+   → success.
+
+**Webhook:** `app/api/webhooks/stripe` handles only `checkout.session.completed` (bookings).
+There is **no `payment_intent.succeeded` fallback for tickets** — a paid order becomes
+tickets only when a client calls `/purchase`. The app persists paid-but-unfinalized orders
+and retries them (idempotent).
+
+### Free registration — `POST /api/event/redeem` (bearer OK)
+Body `{ eventId }` (other fields ignored). 201 `{ success, message: "Ticket generated!
+Check your email.", uniqueKey }`; 400 `{ message: "You have already claimed a ticket for this
+event.", uniqueKey }`; 400 `{ message: "This event is fully booked." }`; 404 "Event not found";
+500 on a malformed id. `GET /api/event/redeem` → `{ data: EventRedemption[] }` (event
+populated). Gaps: no `price_category` check (a paid event can be registered for free), the
+duplicate check isn't atomic.
+
+### Deals — still cookie-only (blocked in the app)
+`POST /api/deals/redeem` and `/redeem/multiple` use `getServerSession` and take `userId` from
+the **body** (impersonation). Paid-deal PaymentIntents come from a server action
+(`app/actions/stripe.tsx`) — no HTTP route. `GET /api/deals/redeem` is **unauthenticated and
+returns every user's redemptions**. `/redeem/multiple` doesn't prevent replaying one
+PaymentIntent. `/api/deals/verify` queries a non-existent `uniqueKey` field.
+
+### Guest identity — `POST /api/mobile/v1/auth/guest` (not used by the app)
+Issues access/refresh tokens for **any existing account without a password** (incl.
+Google-only accounts) given just the email, with no blocked/deleted check → account
+takeover risk. 409 (`code: null`) only for password accounts.
+
+### PDFs
+No endpoint. `POST /api/event/ticket/purchase/[id]/send-invoice` is cookie-only and for the
+owning business only. The app renders ticket/invoice PDFs on-device from `/api/tickets` /
+the purchase `receipt`.
+
+### Backend needs before release (Phase C)
+1. Fix `/auth/guest` (require a verification step, never issue tokens for existing accounts
+   the caller doesn't prove they own; check blocked/deleted).
+2. Stop setting NextAuth cookies for mobile requests (`X-Client: mobile` header is sent on
+   every app request) — or return mobile tokens instead.
+3. `payment_intent.succeeded` webhook that finalizes ticket purchases (idempotent), so a
+   paid order can't be stranded if the app is killed and never reopened.
+4. Price route: keep the invoice number on re-price, cancel superseded PaymentIntents,
+   release the previous hold only after validation and only for its owner, return stable
+   error `code`s (e.g. `SOLD_OUT`, `PROMO_INVALID`).
+5. Hold route: validate quantity ≥ 1, the per-request cap and that items match the
+   PaymentIntent metadata.
+6. Deals: `POST /api/mobile/v1/deals/redeem` (bearer, user from the token), a deal price /
+   PaymentIntent route, replay protection; lock down `GET /api/deals/redeem`.
+7. Registration: check `price_category === "registration"`, unique index on (event, user).
+8. Buyer-facing invoice email/PDF endpoint (bearer).
