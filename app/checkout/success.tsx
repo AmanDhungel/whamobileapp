@@ -12,11 +12,12 @@ import {
   ScreenHeader,
   Text,
   TicketCodeCarousel,
+  TicketDownloadButtons,
 } from "@/components";
 import { useAccountArea } from "@/store/authStore";
 import { useCheckoutResultStore } from "@/store/checkoutResultStore";
 import { theme } from "@/theme";
-import { formatDateRange, formatTimeRange } from "@/utils/format";
+import { formatDate, formatDateRange, formatTimeRange } from "@/utils/format";
 import type { TicketCode } from "@/utils/tickets";
 
 /**
@@ -85,6 +86,32 @@ export default function CheckoutSuccessScreen() {
           <Text variant="h3">{receipt.event.title}</Text>
           <TicketCodeCarousel codes={codes} holderName={receipt.holderName} />
         </Card>
+
+        <TicketDownloadButtons
+          ticket={{
+            title: receipt.event.title,
+            dateLine: when || null,
+            venue,
+            holderName: receipt.holderName,
+            codes,
+          }}
+          invoice={{
+            invoiceNumber: receipt.invoiceNumber,
+            issuedOn: formatDate(receipt.createdAt),
+            eventTitle: receipt.event.title,
+            venue,
+            dateLine: when || null,
+            lines: receipt.items.map((i) => ({
+              name: i.optionName,
+              quantity: i.quantity,
+              unitPrice: i.unitPrice,
+            })),
+            serviceFee: receipt.serviceFee,
+            surcharge: receipt.surcharge,
+            promoCode: receipt.promoCode,
+            total: receipt.totalAmount,
+          }}
+        />
 
         {!!when && <InfoRow icon="calendar" label="Date and time" value={when} />}
         {!!venue && <InfoRow icon="map-pin" label="Location" value={venue} />}
