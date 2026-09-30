@@ -1,16 +1,20 @@
-import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
   CardSkeleton,
   LoginPrompt,
+  PendingPurchaseNotice,
   QueryList,
   SegmentedControl,
   Text,
   TicketRow,
 } from "@/components";
 import { useTickets } from "@/hooks/queries/tickets";
+import { retryPendingPurchases } from "@/hooks/usePendingPurchaseRecovery";
 import { useIsCustomer } from "@/store/authStore";
 import { theme, useTheme } from "@/theme";
 import { splitTickets } from "@/utils/tickets";
@@ -27,6 +31,14 @@ export default function ActivityScreen() {
   const isCustomer = useIsCustomer();
   const tickets = useTickets();
   const [segment, setSegment] = useState<Segment>("upcoming");
+  const queryClient = useQueryClient();
+
+  // Finish any paid-but-unissued orders whenever this tab is opened.
+  useFocusEffect(
+    useCallback(() => {
+      void retryPendingPurchases(queryClient);
+    }, [queryClient]),
+  );
 
   const split = useMemo(() => splitTickets(tickets.data ?? []), [tickets.data]);
 
@@ -46,6 +58,7 @@ export default function ActivityScreen() {
             onChange={setSegment}
           />
         )}
+        <PendingPurchaseNotice />
       </View>
 
       {!isCustomer ? (

@@ -8,8 +8,12 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { queryClient } from "@/api/queryClient";
 import { LoginPromptSheet, ToastHost } from "@/components";
+import { ConfigErrorScreen } from "@/components/ConfigErrorScreen";
+import { usePendingPurchaseRecovery } from "@/hooks/usePendingPurchaseRecovery";
+import { PaymentsProvider } from "@/services/payments";
 import { useAccountArea, useAuthStore } from "@/store/authStore";
 import { fontAssets, theme } from "@/theme";
+import { configProblems } from "@/utils/env";
 
 // Hold the native splash until fonts are loaded AND the stored session is restored.
 void SplashScreen.preventAutoHideAsync();
@@ -19,15 +23,18 @@ export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts(fontAssets);
   const status = useAuthStore((s) => s.status);
 
+  const configOk = configProblems.length === 0;
+
   useEffect(() => {
+    if (!configOk) return; // nothing may call the API with a broken configuration
     useAuthStore
       .getState()
       .restore()
       .catch(() => useAuthStore.setState({ status: "signedOut", user: null }));
-  }, []);
+  }, [configOk]);
 
   // A font failure falls back to system fonts rather than blocking the app.
-  const ready = (fontsLoaded || !!fontError) && status !== "loading";
+  const ready = (fontsLoaded || !!fontError) && (!configOk || status !== "loading");
 
   useEffect(() => {
     if (ready) SplashScreen.hide();
@@ -35,13 +42,24 @@ export default function RootLayout() {
 
   if (!ready) return null;
 
+  if (!configOk) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar style="dark" />
+        <ConfigErrorScreen problems={configProblems} />
+      </SafeAreaProvider>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
-        <StatusBar style="dark" />
-        <RootNavigator />
-        <LoginPromptSheet />
-        <ToastHost />
+        <PaymentsProvider>
+          <StatusBar style="dark" />
+          <RootNavigator />
+          <LoginPromptSheet />
+          <ToastHost />
+        </PaymentsProvider>
       </QueryClientProvider>
     </SafeAreaProvider>
   );
@@ -57,6 +75,10 @@ export default function RootLayout() {
  */
 function RootNavigator() {
   const area = useAccountArea();
+  const userId = useAuthStore((s) => s.user?.id);
+
+  // Paid-but-unfinalized ticket orders are retried at start and after each login.
+  usePendingPurchaseRecovery(userId ?? "public");
 
   return (
     <Stack
@@ -80,6 +102,9 @@ function RootNavigator() {
         <Stack.Screen name="activity/tickets/[id]" />
         <Stack.Screen name="favorites" />
         <Stack.Screen name="profile/edit" />
+        {/* Ticket checkout — signed-in customers and guests. */}
+        <Stack.Screen name="checkout/[slug]" />
+        <Stack.Screen name="checkout/success" />
       </Stack.Protected>
 
       {/* Login/signup: reachable from any "Log in" entry point while logged out. On

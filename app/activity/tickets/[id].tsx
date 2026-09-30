@@ -6,6 +6,7 @@ import {
   EmptyState,
   ErrorState,
   InfoRow,
+  InvoiceCard,
   Loader,
   LoginPrompt,
   RemoteImage,
@@ -14,6 +15,7 @@ import {
   StaticMap,
   Text,
   TicketCodeCarousel,
+  TicketDownloadButtons,
   TextLink,
   ticketWhen,
   openDeal,
@@ -22,7 +24,7 @@ import {
 import { useTickets } from "@/hooks/queries/tickets";
 import { useAuthStore, useIsCustomer } from "@/store/authStore";
 import { theme, useTheme } from "@/theme";
-import { formatPrice } from "@/utils/format";
+import { formatDate } from "@/utils/format";
 import {
   isPurchase,
   ticketCodes,
@@ -119,6 +121,32 @@ export default function TicketDetailScreen() {
           )}
         </Card>
 
+        {codes.length > 0 && (
+          <TicketDownloadButtons
+            ticket={{ title: ticketTitle(item), dateLine: when, venue, holderName, codes }}
+            invoice={
+              isPurchase(item)
+                ? {
+                    invoiceNumber: item.invoiceNumber,
+                    issuedOn: formatDate(item.createdAt),
+                    eventTitle: ticketTitle(item),
+                    venue,
+                    dateLine: when,
+                    lines: item.items.map((l) => ({
+                      name: l.optionName,
+                      quantity: l.quantity,
+                      unitPrice: l.unitPrice,
+                    })),
+                    serviceFee: item.serviceFee,
+                    surcharge: item.surcharge,
+                    promoCode: item.promoCode,
+                    total: item.totalAmount,
+                  }
+                : null
+            }
+          />
+        )}
+
         {!!when && <InfoRow icon="calendar" label="Date and time" value={when} />}
         {!!venue && (
           <View style={styles.section}>
@@ -133,49 +161,18 @@ export default function TicketDetailScreen() {
         )}
 
         {isPurchase(item) && (
-          <Card style={styles.section}>
-            <Text variant="h3">Invoice</Text>
-            <Text variant="caption" color="mutedForeground">
-              #{item.invoiceNumber}
-            </Text>
-            {item.items.map((line) => (
-              <View key={line.optionId} style={styles.line}>
-                <Text variant="bodySm" style={styles.flex}>
-                  {line.optionName} × {line.quantity}
-                </Text>
-                <Text variant="bodySm">{formatPrice(line.unitPrice * line.quantity)}</Text>
-              </View>
-            ))}
-            <View style={styles.line}>
-              <Text variant="bodySm" color="mutedForeground" style={styles.flex}>
-                Service fee
-              </Text>
-              <Text variant="bodySm">{formatPrice(item.serviceFee)}</Text>
-            </View>
-            <View style={styles.line}>
-              <Text variant="bodySm" color="mutedForeground" style={styles.flex}>
-                Card processing surcharge (2.5%)
-              </Text>
-              <Text variant="bodySm">{formatPrice(item.surcharge)}</Text>
-            </View>
-            {!!item.promoCode && (
-              <View style={styles.line}>
-                <Text variant="bodySm" color="mutedForeground" style={styles.flex}>
-                  Promo code
-                </Text>
-                <Text variant="bodySm">{item.promoCode}</Text>
-              </View>
-            )}
-            <View style={[styles.line, styles.total, { borderTopColor: t.colors.border }]}>
-              <Text variant="label" style={styles.flex}>
-                Total paid
-              </Text>
-              <Text variant="label">{formatPrice(item.totalAmount)}</Text>
-            </View>
-            <Text variant="caption" color="mutedForeground">
-              Incl. GST. Service and processing fees are non-refundable.
-            </Text>
-          </Card>
+          <InvoiceCard
+            invoiceNumber={item.invoiceNumber}
+            lines={item.items.map((l) => ({
+              name: l.optionName,
+              quantity: l.quantity,
+              unitPrice: l.unitPrice,
+            }))}
+            serviceFee={item.serviceFee}
+            surcharge={item.surcharge}
+            promoCode={item.promoCode}
+            total={item.totalAmount}
+          />
         )}
       </View>
     </Screen>
@@ -193,6 +190,4 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing[3] },
   thumb: { width: theme.sizes.thumbMd, height: theme.sizes.thumbMd },
   section: { gap: theme.spacing[3] },
-  line: { flexDirection: "row", alignItems: "center", gap: theme.spacing[3] },
-  total: { borderTopWidth: theme.sizes.hairline, paddingTop: theme.spacing[3] },
 });

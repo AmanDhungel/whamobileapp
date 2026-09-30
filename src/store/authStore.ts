@@ -16,6 +16,7 @@ import {
 } from "@/api/tokenStorage";
 import type { AccountCategory, AuthSession, AuthUser } from "@/api/types";
 import { showToast } from "@/components/Toast";
+import { clearApiCookies } from "@/services/cookies";
 
 // Removed in Phase B (guest browsing is no longer a mode — browsing is public).
 // Cleaned up on restore for installs that still have it.
@@ -53,7 +54,7 @@ const FORCED_LOGOUT_MESSAGES: Record<AuthFailureReason, string> = {
 };
 
 /** Queries holding the signed-in user's own data — dropped on logout. */
-const PRIVATE_QUERY_KEYS = [queryKeys.favorites, queryKeys.tickets];
+const PRIVATE_QUERY_KEYS = [queryKeys.favorites, queryKeys.tickets, queryKeys.registrations];
 
 function dropPrivateQueries() {
   for (const queryKey of PRIVATE_QUERY_KEYS) queryClient.removeQueries({ queryKey });
@@ -111,6 +112,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   clearLocalSession: async () => {
     await clearSession();
+    await clearApiCookies();
     dropPrivateQueries();
     set({ status: "signedOut", user: null });
   },

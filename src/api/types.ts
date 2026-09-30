@@ -577,3 +577,125 @@ export interface UploadProfilePicResponse {
   success: boolean;
   data: { url: string };
 }
+
+// ─── Ticket checkout (Phase C) ──────────────────────────────────────────────────
+// Typed from the route handlers: app/api/mobile/v1/event/ticket/price,
+// server/lib/eventTicketPricing.ts, app/api/event/ticket/{hold,hold/release,purchase}.
+
+export interface TicketCartItem {
+  optionId: ObjectId;
+  quantity: number;
+}
+
+/** POST /api/mobile/v1/event/ticket/price (guests allowed). Creates a NEW PaymentIntent every call. */
+export interface TicketPriceRequest {
+  eventId: ObjectId;
+  items: TicketCartItem[];
+  promoCode?: string;
+  /** The server releases this PaymentIntent's hold before re-pricing. */
+  previousPaymentIntentId?: string;
+}
+
+export interface PricedLineItem {
+  optionId: ObjectId;
+  name: string;
+  quantity: number;
+  /** Per-ticket price after any promo discount (AUD, unrounded). */
+  unitPrice: number;
+  originalPrice: number;
+  discounted: boolean;
+}
+
+/** Authoritative server pricing — the app only formats these, never computes them. */
+export interface TicketPricing {
+  clientSecret: string;
+  paymentIntentId: string;
+  invoiceNumber: string;
+  items: PricedLineItem[];
+  ticketTotal: number;
+  serviceFee: number;
+  surcharge: number;
+  totalToPay: number;
+  promoApplied: boolean;
+}
+
+/** POST /api/event/ticket/hold — idempotent per paymentIntentId (doesn't reset the timer). */
+export interface TicketHoldRequest {
+  eventId: ObjectId;
+  items: TicketCartItem[];
+  paymentIntentId: string;
+}
+
+export interface TicketHoldResponse {
+  success: boolean;
+  /** 5 minutes after the hold was created. */
+  expiresAt: ISODateString;
+}
+
+export interface GuestInfo {
+  name: string;
+  email: string;
+  phone: string;
+}
+
+/** POST /api/event/ticket/purchase — idempotent per paymentIntentId. */
+export interface TicketPurchaseRequest {
+  eventId: ObjectId;
+  paymentIntentId: string;
+  /** Required when not signed in (else 400 code GUEST_INFO_REQUIRED). */
+  guestInfo?: GuestInfo;
+}
+
+export interface PurchaseReceipt {
+  /** Buyer's account name, or "Ticket Holder" (always on idempotent replays). */
+  holderName: string;
+  event: {
+    title: string;
+    image?: string;
+    venue?: string;
+    location?: string;
+    dateRange?: { from?: DateOnlyString; to?: DateOnlyString };
+    latitude?: number;
+    longitude?: number;
+    slug?: string;
+    startTime?: TimeString;
+    endTime?: TimeString;
+  };
+  items: { optionName: string; uniqueKeys: string[]; quantity: number; unitPrice: number }[];
+  invoiceNumber: string;
+  ticketTotal: number;
+  serviceFee: number;
+  surcharge: number;
+  totalAmount: number;
+  promoCode?: string;
+  createdAt: ISODateString;
+}
+
+export interface TicketPurchaseResponse {
+  success: boolean;
+  purchaseId: ObjectId;
+  invoiceNumber: string;
+  items: { optionName: string; codes: string[] }[];
+  /** Web-cookie auto-login only — always false for bearer (app) callers. */
+  signedIn: boolean;
+  receipt: PurchaseReceipt;
+}
+
+// ─── Free event registration (POST/GET /api/event/redeem, bearer OK) ─────────────
+
+export interface RegisterForEventResponse {
+  success: boolean;
+  /** "Ticket generated! Check your email." */
+  message: string;
+  /** "WHA-EVT-XXXXXXXX" — also shown as a QR in My tickets. */
+  uniqueKey: string;
+}
+
+/** GET /api/event/redeem → { data: EventRegistration[] } for the current user. */
+export interface EventRegistration {
+  _id: ObjectId;
+  event: EventSummary | ObjectId;
+  uniqueKey: string;
+  status: TicketStatus;
+  createdAt?: ISODateString;
+}

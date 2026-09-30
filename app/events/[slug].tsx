@@ -1,10 +1,12 @@
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
+import { useState } from "react";
 import { Linking, StyleSheet, View } from "react-native";
 
 import { ApiError } from "@/api/errors";
 import type { EventDetail, EventHost } from "@/api/types";
 import {
   Avatar,
+  CheckoutChoiceSheet,
   Badge,
   Button,
   Card,
@@ -24,17 +26,17 @@ import {
   TicketOptionRow,
   openBusiness,
   shareLink,
-  showToast,
 } from "@/components";
 import { useEvent } from "@/hooks/queries/browse";
+import { useIsRegistered, useRegisterForEvent } from "@/hooks/queries/registrations";
+import { useAccountArea } from "@/store/authStore";
+import { requestLogin } from "@/store/loginPromptStore";
 import { theme, useTheme } from "@/theme";
 import { getEventAvailability } from "@/utils/eventStatus";
 import { formatDateRange, formatPrice, formatTimeRange, titleCase } from "@/utils/format";
 import { htmlToText, splitLines } from "@/utils/html";
 import { webUrls } from "@/utils/links";
 import { normalizeEventSlug } from "@/utils/slug";
-
-const COMING_SOON = "Coming soon — in-app tickets arrive in the next update.";
 
 function hostOf(event: EventDetail): EventHost | null {
   return typeof event.user === "object" && event.user ? event.user : null;
@@ -70,13 +72,17 @@ function EventDetailSkeleton() {
 }
 
 /**
- * ~ web /events/[slug] (components/Event/SingleEventPage.tsx). Checkout isn't in this
- * phase: "Get tickets" / "Register" show "Coming soon"; external events open their link.
+ * ~ web /events/[slug] (components/Event/SingleEventPage.tsx). Paid events open the
+ * ticket checkout; external events open their ticket link.
  */
 export default function EventDetailScreen() {
   const params = useLocalSearchParams<{ slug: string }>();
   const slug = normalizeEventSlug(params.slug);
   const query = useEvent(slug);
+  const area = useAccountArea();
+  const [choiceOpen, setChoiceOpen] = useState(false);
+  const isRegistered = useIsRegistered(query.data?._id ?? "");
+  const register = useRegisterForEvent(slug);
 
   if (query.isPending) {
     return (
@@ -127,7 +133,13 @@ export default function EventDetailScreen() {
             availability.fromPrice !== null
               ? `From ${formatPrice(availability.fromPrice)}`
               : undefined,
-          onPress: () => showToast({ type: "info", message: COMING_SOON }),
+          onPress: () => {
+            if (area === "customer") {
+              router.push({ pathname: "/checkout/[slug]", params: { slug: event.slug ?? slug } });
+            } else {
+              setChoiceOpen(true); // log in, or continue as a guest
+            }
+          },
         };
   } else if (event.price_category === "external") {
     action = {
@@ -138,13 +150,34 @@ export default function EventDetailScreen() {
       },
     };
   } else {
-    action = availability.registrationFull
-      ? { label: "Fully Booked", disabled: true, onPress: () => undefined }
-      : {
-          label: "Register",
-          caption: "Free event",
-          onPress: () => showToast({ type: "info", message: COMING_SOON }),
-        };
+    // Free registration (web priority): Already Registered → Fully Booked → Processing → Register.
+    const spotsLeft =
+      availability.showRemaining && availability.registrationRemaining !== null
+        ? `${availability.registrationRemaining} spot${availability.registrationRemaining === 1 ? "" : "s"} left`
+        : undefined;
+    if (isRegistered) {
+      action = {
+        label: "Already Registered",
+        caption: "Your ticket is in My tickets",
+        disabled: true,
+        onPress: () => undefined,
+      };
+    } else if (availability.registrationFull) {
+      action = { label: "Fully Booked", disabled: true, onPress: () => undefined };
+    } else {
+      action = {
+        label: register.isPending ? "Processing..." : "Register",
+        caption: spotsLeft ?? "Free event",
+        disabled: register.isPending,
+        onPress: () => {
+          if (area !== "customer") {
+            requestLogin("Please login to get your ticket");
+            return;
+          }
+          register.mutate(event._id);
+        },
+      };
+    }
   }
 
   return (
@@ -315,6 +348,22 @@ export default function EventDetailScreen() {
           onPress={action.onPress}
         />
       </StickyActionBar>
+
+      <CheckoutChoiceSheet
+        visible={choiceOpen}
+        onClose={() => setChoiceOpen(false)}
+        onLogin={() => {
+          setChoiceOpen(false);
+          router.push({ pathname: "/login", params: { type: "user" } });
+        }}
+        onGuest={() => {
+          setChoiceOpen(false);
+          router.push({
+            pathname: "/checkout/[slug]",
+            params: { slug: event.slug ?? slug, guest: "1" },
+          });
+        }}
+      />
     </View>
   );
 }

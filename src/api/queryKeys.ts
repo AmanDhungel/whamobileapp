@@ -14,4 +14,5 @@ export const queryKeys = {
   deal: (id: string) => ["deal", id] as const,
   favorites: ["favorites"] as const,
   tickets: ["tickets"] as const,
+  registrations: ["registrations"] as const,
 };
