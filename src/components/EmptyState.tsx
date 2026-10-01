@@ -46,13 +46,12 @@ export function EmptyState({
 }
 
 const styles = StyleSheet.create({
+  // Sits at the top of its area (under the header / filters), not centred in the screen.
   container: {
-    flex: 1,
     alignItems: "center",
-    justifyContent: "center",
     gap: theme.spacing[4],
     paddingHorizontal: theme.spacing[6],
-    paddingVertical: theme.spacing[10],
+    paddingVertical: theme.spacing[6],
   },
   iconWrap: {
     width: theme.spacing[16],
