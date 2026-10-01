@@ -1,4 +1,5 @@
 import { getDeviceInfo } from "@/utils/device";
+import { prepareImagesForUpload } from "@/services/imageUpload";
 
 import { apiRequest, apiRequestWithMeta, MOBILE_API, type ApiResult } from "./client";
 import type {
@@ -51,14 +52,14 @@ export async function registerUser(
   form.append("accpetalltermsandcondition", String(body.accpetalltermsandcondition));
   form.append("deviceId", deviceId);
   form.append("platform", platform);
-  if (body.image) {
-    // RN FormData file part — typed loosely by React Native's lib.
-    form.append("image", body.image as unknown as Blob);
-  }
+  const upload = await prepareImagesForUpload(body.image ? [body.image] : []);
+  // RN FormData file part — typed loosely by React Native's lib.
+  if (upload.files[0]) form.append("image", upload.files[0] as unknown as Blob);
   return apiRequestWithMeta<RegisterResponse>(`${MOBILE_API}/auth/register`, {
     method: "POST",
     auth: false,
     body: form,
+    uploadBytes: upload.totalBytes,
   });
 }
 
@@ -86,7 +87,9 @@ export async function registerBusiness(
   if (body.community.length) form.append("community", JSON.stringify(body.community));
   form.append("schedule", JSON.stringify(body.schedule));
   form.append("accpetalltermsandcondition", String(body.accpetalltermsandcondition));
-  const [cover, ...rest] = body.images;
+  // Resized/re-encoded JPEGs, the whole set under the request-size budget.
+  const upload = await prepareImagesForUpload(body.images);
+  const [cover, ...rest] = upload.files;
   // RN FormData file parts — typed loosely by React Native's lib.
   if (cover) form.append("image", cover as unknown as Blob);
   rest.forEach((img, i) => form.append(`venue_image_${i}`, img as unknown as Blob));
@@ -96,6 +99,7 @@ export async function registerBusiness(
     method: "POST",
     auth: false,
     body: form,
+    uploadBytes: upload.totalBytes,
   });
 }
 

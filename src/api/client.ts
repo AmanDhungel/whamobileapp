@@ -5,6 +5,7 @@ import {
   ApiError,
   GENERIC_ERROR_MESSAGE,
   NETWORK_ERROR_MESSAGE,
+  UPLOAD_FAILED_MESSAGE,
   parseErrorBody,
   tryParseJson,
 } from "./errors";
@@ -14,6 +15,8 @@ import type { AuthTokens, MobileEnvelope } from "./types";
 export const MOBILE_API = "/api/mobile/v1";
 
 const REQUEST_TIMEOUT_MS = 20_000;
+/** Uploads get extra time on top, assuming at least this upstream throughput. */
+const MIN_UPLOAD_BYTES_PER_SECOND = 64 * 1024;
 /** Refresh proactively when the access token has less than this left. */
 const REFRESH_SKEW_MS = 30_000;
 
@@ -39,6 +42,11 @@ export interface RequestOptions {
    */
   authMode?: "strict" | "lenient";
   signal?: AbortSignal;
+  /**
+   * Total size of the files in a multipart body. Extends the timeout to match, and a
+   * failure while sending reads "Upload failed…" instead of "Can't reach the server".
+   */
+  uploadBytes?: number;
 }
 
 export interface ApiResult<T> {
@@ -101,7 +109,10 @@ async function send<T>(
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const uploadBytes = opts.uploadBytes ?? 0;
+  const timeoutMs =
+    REQUEST_TIMEOUT_MS + Math.ceil((uploadBytes / MIN_UPLOAD_BYTES_PER_SECOND) * 1000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const onExternalAbort = () => controller.abort();
   opts.signal?.addEventListener("abort", onExternalAbort);
 
@@ -118,10 +129,18 @@ async function send<T>(
   } catch (err) {
     if (opts.signal?.aborted) throw err; // caller cancelled — not a network error
     const timedOut = controller.signal.aborted;
-    throw new ApiError(
-      timedOut ? "The request timed out. Please try again." : NETWORK_ERROR_MESSAGE,
-      0,
-    );
+    // RN's fetch only ever says "TypeError: Network request failed" — log it anyway so
+    // Metro shows which request died and how big its upload was.
+    if (__DEV__) {
+      console.warn(
+        `[api] ${opts.method ?? "GET"} ${path} failed${timedOut ? " (timeout)" : ""}` +
+          (uploadBytes ? ` — upload ${(uploadBytes / 1024).toFixed(0)} KB` : ""),
+        err,
+      );
+    }
+    let message = timedOut ? "The request timed out. Please try again." : NETWORK_ERROR_MESSAGE;
+    if (uploadBytes > 0) message = UPLOAD_FAILED_MESSAGE;
+    throw new ApiError(message, 0);
   } finally {
     clearTimeout(timeout);
     opts.signal?.removeEventListener("abort", onExternalAbort);
