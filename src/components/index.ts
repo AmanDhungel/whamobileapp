@@ -26,6 +26,7 @@ export { ImageGallery, ImageViewer, PhotoGrid } from "./ImageGallery";
 export { ImagePickerGrid } from "./ImagePickerGrid";
 export { InfoRow } from "./InfoRow";
 export { ListDivider, ListRow } from "./ListRow";
+export { LocationPicker, type LocationValue } from "./LocationPicker";
 export {
   LocationFilterChip,
   locationLabel,

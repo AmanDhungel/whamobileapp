@@ -7,7 +7,6 @@ import { StyleSheet, View } from "react-native";
 import { normalizeEmail } from "@/api/auth";
 import type { UploadFile, WeekSchedule, WeekdayKey } from "@/api/types";
 import {
-  AddressAutocomplete,
   Button,
   Card,
   Checkbox,
@@ -16,11 +15,11 @@ import {
   EmailVerifyGate,
   Grid,
   ImagePickerGrid,
+  LocationPicker,
   Screen,
   SelectField,
   SelectableTile,
   showToast,
-  StaticMap,
   StepHeader,
   StepProgress,
   Text,
@@ -62,7 +61,7 @@ const TOTAL_STEPS = 8;
 const STEP_FIELDS: Partial<Record<number, FieldPath<BusinessSignupValues>[]>> = {
   2: ["business_name", "phone_number"],
   3: ["business_category"],
-  4: ["location"],
+  4: ["location", "latitude", "longitude"],
   8: ["name", "email", "password", "confirmPassword", "accpetalltermsandcondition"],
 };
 
@@ -101,7 +100,13 @@ export default function BusinessSignupScreen() {
   const [imagesError, setImagesError] = useState<string | null>(null);
   const [verifiedEmail, setVerifiedEmail] = useState<string | null>(null);
 
-  const { control, handleSubmit, trigger, setValue } = useForm<BusinessSignupValues>({
+  const {
+    control,
+    handleSubmit,
+    trigger,
+    setValue,
+    formState: { errors },
+  } = useForm<BusinessSignupValues>({
     resolver: zodResolver(businessSignupSchema),
     mode: "onChange",
     defaultValues: {
@@ -357,27 +362,21 @@ export default function BusinessSignupScreen() {
               title="Where is your business located?"
               sub="Search and select your address. The pin shows the exact location we'll display."
             />
-            <Controller
-              control={control}
-              name="location"
-              render={({ fieldState }) => (
-                <AddressAutocomplete
-                  label="Location address"
-                  value={location}
-                  error={fieldState.error?.message}
-                  onSelect={(s) => {
-                    setValue("location", s?.label ?? "", { shouldValidate: !!s });
-                    setValue("latitude", s?.latitude);
-                    setValue("longitude", s?.longitude);
-                  }}
-                />
-              )}
+            <LocationPicker
+              label="Location address"
+              value={{ address: location, latitude, longitude }}
+              addressError={errors.location?.message}
+              coordinatesError={errors.latitude?.message ?? errors.longitude?.message}
+              onChange={(patch) => {
+                if (patch.address !== undefined) {
+                  setValue("location", patch.address, { shouldValidate: !!patch.address });
+                }
+                if (patch.latitude !== undefined && patch.longitude !== undefined) {
+                  setValue("latitude", patch.latitude, { shouldValidate: true });
+                  setValue("longitude", patch.longitude, { shouldValidate: true });
+                }
+              }}
             />
-            {typeof latitude === "number" && typeof longitude === "number" && (
-              <View style={styles.mapPreview}>
-                <StaticMap latitude={latitude} longitude={longitude} label={location} />
-              </View>
-            )}
           </>
         )}
 
@@ -676,7 +675,6 @@ const styles = StyleSheet.create({
   },
   fields: { gap: theme.spacing[4] },
   prefix: { marginRight: theme.spacing[2] },
-  mapPreview: { marginTop: theme.spacing[4] },
   dayChips: { paddingHorizontal: 0 },
   shiftRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing[2] },
   guidelines: { gap: theme.spacing[1.5], marginBottom: theme.spacing[5] },

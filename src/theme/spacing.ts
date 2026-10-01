@@ -57,6 +57,8 @@ export const sizes = {
   detailHeroHeight: 280,
   galleryThumb: 104,
   staticMapHeight: 180,
+  /** LocationPicker map height, as a fraction of the window height. */
+  mapPickerHeightRatio: 0.4,
   mapPin: 34,
   thumbSm: 48,
   thumbMd: 64,

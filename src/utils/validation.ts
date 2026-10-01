@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { AUSTRALIA_BOUNDS, OUTSIDE_AUSTRALIA_MESSAGE } from "./geo";
+
 // Transcribed from docs/mobile/07-forms-and-validation.md and the web components it
 // cites (components/Auth/LoginPage.tsx, Signup.tsx, app/forgot-password, app/verify-code).
 // Error copy is the website's, verbatim.
@@ -73,6 +75,17 @@ export const reviewSchema = z.object({
 });
 export type ReviewValues = z.infer<typeof reviewSchema>;
 
+// Map pin coordinates (LocationPicker). Bounds are checked per axis — the same test
+// as isInAustralia(), but field-level so it runs during per-step validation.
+const pinLatitude = z
+  .number({ error: "Please place the pin on your location" })
+  .min(AUSTRALIA_BOUNDS.minLatitude, OUTSIDE_AUSTRALIA_MESSAGE)
+  .max(AUSTRALIA_BOUNDS.maxLatitude, OUTSIDE_AUSTRALIA_MESSAGE);
+const pinLongitude = z
+  .number({ error: "Please place the pin on your location" })
+  .min(AUSTRALIA_BOUNDS.minLongitude, OUTSIDE_AUSTRALIA_MESSAGE)
+  .max(AUSTRALIA_BOUNDS.maxLongitude, OUTSIDE_AUSTRALIA_MESSAGE);
+
 // Business signup — components/Auth/BusinessSignupPage.tsx:104-134 (messages verbatim).
 // Per-step gating uses the web's STEP_FIELDS map (see app/(auth)/business-signup.tsx).
 export const businessSignupSchema = z
@@ -86,8 +99,8 @@ export const businessSignupSchema = z
       .max(10, "Valid phone number required"),
     business_category: z.string().min(1, "Please select a category"),
     location: z.string().min(1, "Please select your business address from the dropdown"),
-    latitude: z.number().optional(),
-    longitude: z.number().optional(),
+    latitude: pinLatitude,
+    longitude: pinLongitude,
     is24_7: z.boolean(),
     name: z.string().trim().min(2, "Contact name is required"),
     email: z.string().trim().pipe(z.email("Please enter a valid email")),
@@ -118,8 +131,8 @@ export type ProfileNameValues = z.infer<typeof profileNameSchema>;
 export const contactDetailsSchema = z.object({
   phone_number: z.string().trim().optional(),
   location: z.string().optional(),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
+  latitude: pinLatitude.optional(),
+  longitude: pinLongitude.optional(),
 });
 export type ContactDetailsValues = z.infer<typeof contactDetailsSchema>;
 
