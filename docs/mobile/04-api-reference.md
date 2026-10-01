@@ -684,3 +684,65 @@ the purchase `receipt`.
    PaymentIntent route, replay protection; lock down `GET /api/deals/redeem`.
 7. Registration: check `price_category === "registration"`, unique index on (event, user).
 8. Buyer-facing invoice email/PDF endpoint (bearer).
+
+---
+
+## Google sign-in — backend contract as implemented (mobile app, 2026-10-01)
+
+Read from `server/lib/googleAuth.ts` and `app/api/mobile/v1/auth/social/route.ts`.
+
+**Request** `POST /api/mobile/v1/auth/social` (no bearer) `{ idToken, provider: "google",
+deviceId?, platform? }` → `data: { accessToken, refreshToken, expiresIn, user }` (same shape
+as `/auth/login`; `user` = `toAuthUser`).
+
+**Token verification** — `jose.jwtVerify` against Google's JWKS, issuer
+`accounts.google.com`, audience = whichever of `GOOGLE_CLIENT_ID`, `GOOGLE_IOS_CLIENT_ID`,
+`GOOGLE_ANDROID_CLIENT_ID` are set. The app's tokens carry:
+- Android (native library): `aud` = the **web** client ID → must equal one of the three
+  (normally `GOOGLE_CLIENT_ID`, which is also the website's NextAuth client).
+- iOS: `aud` = the **iOS** client ID → `GOOGLE_IOS_CLIENT_ID`.
+`GOOGLE_ANDROID_CLIENT_ID` is never the audience of a native-library token; it's harmless.
+
+**Errors** (envelope, `code: null`):
+| Status | Message | When |
+|---|---|---|
+| 400 | `idToken and provider are required` / `provider must be "google" or "apple"` | bad body |
+| 401 | `Invalid or expired social sign-in token` | signature / audience / issuer / expiry failed |
+| 500 | `Server misconfigured: no Google client ID configured (…)` | none of the three env vars set |
+| 400 | find-or-create error message | DB error |
+| 500 | `MobileAuthConfigError` message / `Internal Server Error` | JWT secret missing etc. |
+
+**Find-or-create** (`findOrCreateGoogleUser`, a copy of the web NextAuth Google callback):
+- Looks up **any** user by email — any category, any provider.
+- No match → creates `{ category: "user", provider: "google", googleId, name, image,
+  emailVerified, verified: true }`.
+- Match → signs in **as that existing account**, whatever it is: a password customer
+  account, a guest account, or a **business** account. Only sets `emailVerified` if it was
+  missing; `googleId` is not stored on an existing account. No message is returned — the
+  app just receives the session and routes by `user.category` (a business account lands in
+  the business area).
+- No `isblocked` / `deletedAt` gate (same as `/auth/login`); blocked accounts are rejected
+  per request by `getAuthUser` (ACCOUNT_BLOCKED → the app's forced logout). Deleted
+  accounts can't match (email anonymised); the same Google account then creates a new user.
+
+### Backend changes needed (not made — F:\WHA is read-only for the app)
+1. **Check `email_verified`** in `verifyGoogleIdToken` — reject tokens where it isn't
+   `true`. Today an unverified email in a Google token would sign in to the existing
+   account with that email (account takeover).
+2. **Decide account linking**: Google currently signs into password and business accounts
+   by email alone. If business accounts must never use Google (the app and website hide
+   the button for businesses), `/auth/social` should refuse a matched `category:"business"`
+   user, e.g. 403 `{ code: "BUSINESS_ACCOUNT", message: "This email belongs to a business
+   account. Log in with your email and password." }`. Optionally store `googleId` on first
+   link.
+3. **Optional**: gate `isblocked` at sign-in (both `/auth/login` and `/auth/social`) so a
+   suspended user gets a clear message instead of a session that dies on the first call.
+
+### Backend env vars
+| Var | Local (`F:\WHA\.env`) | Vercel production |
+|---|---|---|
+| `GOOGLE_CLIENT_ID` | **missing** — set to the web client ID the app uses | must equal the app's `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` (also the website's NextAuth client) |
+| `GOOGLE_CLIENT_SECRET` | **missing** (website Google login only) | set (website) |
+| `GOOGLE_IOS_CLIENT_ID` | **missing** — set to the app's iOS client ID | set to the app's iOS client ID |
+| `GOOGLE_ANDROID_CLIENT_ID` | optional | optional |
+| `MOBILE_JWT_SECRET` | set | must be set |
