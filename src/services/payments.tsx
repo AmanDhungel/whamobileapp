@@ -1,12 +1,9 @@
 import { StripeProvider } from "@stripe/stripe-react-native";
-import Constants, { ExecutionEnvironment } from "expo-constants";
 import * as Linking from "expo-linking";
 import type { ReactNode } from "react";
 
 import { env } from "@/utils/env";
-
-/** Expo Go (card payments only) vs. a development/production build (wallets too). */
-export const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+import { isExpoGo } from "@/utils/runtime";
 
 /**
  * URL Stripe uses to return to the app after 3D Secure / redirect flows. Expo Go

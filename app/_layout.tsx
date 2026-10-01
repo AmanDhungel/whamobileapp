@@ -10,6 +10,7 @@ import { queryClient } from "@/api/queryClient";
 import { LoginPromptSheet, ToastHost } from "@/components";
 import { ConfigErrorScreen } from "@/components/ConfigErrorScreen";
 import { usePendingPurchaseRecovery } from "@/hooks/usePendingPurchaseRecovery";
+import { configureGoogleSignIn } from "@/services/googleSignIn";
 import { PaymentsProvider } from "@/services/payments";
 import { useAccountArea, useAuthStore } from "@/store/authStore";
 import { fontAssets, theme } from "@/theme";
@@ -18,6 +19,9 @@ import { configProblems } from "@/utils/env";
 // Hold the native splash until fonts are loaded AND the stored session is restored.
 void SplashScreen.preventAutoHideAsync();
 SplashScreen.setOptions({ duration: theme.animation.normal, fade: true });
+
+// Once per launch; a no-op in Expo Go or when this build has no Google client IDs.
+configureGoogleSignIn();
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts(fontAssets);
