@@ -49,6 +49,11 @@ export const lightColors = {
   onImage: "#ffffff",
   imageScrim: "rgba(5, 30, 58, 0.45)",
   imageButton: "rgba(255, 255, 255, 0.92)",
+
+  // "Sign in with Google" button — Google's branding guidelines, light theme.
+  googleButton: "#ffffff",
+  googleButtonBorder: "#747775",
+  googleButtonText: "#1f1f1f",
   // QR codes must stay black-on-white regardless of theme (scanner contrast).
   qrForeground: "#000000",
   qrBackground: "#ffffff",
@@ -75,4 +80,8 @@ export const darkColors: ColorPalette = {
   borderStrong: "#444c56",
   divider: "#30363d",
   input: "#30363d",
+  // Google's dark-theme button.
+  googleButton: "#131314",
+  googleButtonBorder: "#8e918f",
+  googleButtonText: "#e3e3e3",
 };

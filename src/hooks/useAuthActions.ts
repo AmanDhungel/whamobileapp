@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 
 import * as authApi from "@/api/auth";
-import { getErrorMessage } from "@/api/errors";
+import { ApiError, getErrorMessage } from "@/api/errors";
 import type { AuthSession, RegisterResponse } from "@/api/types";
 import { showToast } from "@/components/Toast";
 import { useAuthStore } from "@/store/authStore";
@@ -67,12 +67,30 @@ export function useRegisterBusiness() {
   });
 }
 
+/**
+ * POST /auth/social errors → user-facing copy. 401 = token failed verification
+ * ("Invalid or expired social sign-in token"); 500 = server misconfiguration (no
+ * Google client IDs / JWT secret) — not something the user can fix, so not shown
+ * verbatim. Network errors and 400s keep the client's / server's own message.
+ */
+function googleSignInErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 401) return "We couldn't verify your Google sign-in. Please try again.";
+    if (error.status >= 500) {
+      if (__DEV__) console.warn("[google] /auth/social server error:", error.message);
+      return "Google sign-in isn't available right now. Please log in with email.";
+    }
+  }
+  return getErrorMessage(error, "Google sign-in failed. Please try again.");
+}
+
+/** Same session handling as email login — the root layout routes by user.category. */
 export function useGoogleSignInMutation() {
   const signIn = useAuthStore((s) => s.signIn);
   return useMutation({
     mutationFn: (idToken: string) => authApi.socialSignIn({ idToken, provider: "google" }),
     onSuccess: (session) => signIn(session),
-    onError: toastError("Google sign-in failed. Please try again."),
+    onError: (error) => showToast({ type: "error", message: googleSignInErrorMessage(error) }),
   });
 }
 

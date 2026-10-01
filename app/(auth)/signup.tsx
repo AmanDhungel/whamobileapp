@@ -10,6 +10,8 @@ import {
   Button,
   Checkbox,
   EmailVerifyGate,
+  GoogleButton,
+  OrDivider,
   Screen,
   showToast,
   Text,
@@ -195,6 +197,11 @@ export default function SignupScreen() {
         onPress={onSubmit}
       />
 
+      <View style={styles.social}>
+        <OrDivider />
+        <GoogleButton />
+      </View>
+
       <Text variant="bodySm" color="mutedForeground" align="center" style={styles.switch}>
         Already have an account?{" "}
         <TextLink
@@ -216,6 +223,7 @@ export default function SignupScreen() {
 
 const styles = StyleSheet.create({
   form: { gap: theme.spacing[4], marginBottom: theme.spacing[6] },
+  social: { gap: theme.spacing[5], marginTop: theme.spacing[6] },
   switch: { marginTop: theme.spacing[6] },
   business: { marginTop: theme.spacing[3] },
 });
