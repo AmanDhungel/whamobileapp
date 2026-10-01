@@ -17,6 +17,7 @@ import {
 import type { AccountCategory, AuthSession, AuthUser } from "@/api/types";
 import { showToast } from "@/components/Toast";
 import { clearApiCookies } from "@/services/cookies";
+import { signOutOfGoogle } from "@/services/googleSignIn";
 
 // Removed in Phase B (guest browsing is no longer a mode — browsing is public).
 // Cleaned up on restore for installs that still have it.
@@ -113,6 +114,9 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   clearLocalSession: async () => {
     await clearSession();
     await clearApiCookies();
+    // Forget the Google account too, so the next Google sign-in shows the account
+    // picker. Covers logout, forced logout and account deletion; no-op otherwise.
+    await signOutOfGoogle();
     dropPrivateQueries();
     set({ status: "signedOut", user: null });
   },

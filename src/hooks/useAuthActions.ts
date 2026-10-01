@@ -4,6 +4,7 @@ import * as authApi from "@/api/auth";
 import { ApiError, getErrorMessage } from "@/api/errors";
 import type { AuthSession, RegisterResponse } from "@/api/types";
 import { showToast } from "@/components/Toast";
+import { revokeGoogleAccess } from "@/services/googleSignIn";
 import { useAuthStore } from "@/store/authStore";
 
 const toastError = (fallback: string) => (error: unknown) =>
@@ -148,6 +149,8 @@ export function useDeleteAccount() {
   return useMutation({
     mutationFn: () => authApi.deleteMe(),
     onSuccess: async () => {
+      // Remove the app's Google grant (then sign out) — best effort, never blocks.
+      await revokeGoogleAccess();
       await clearLocalSession();
       showToast({ type: "success", message: "Your account has been deleted" });
     },
