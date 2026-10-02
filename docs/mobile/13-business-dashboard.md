@@ -242,6 +242,46 @@ getAuthUser) have **no callers**.
 - Whether archived events can still be purchased (listing/detail don't filter; finalize not inspected).
 - Toasts after the deal Edit form's double PATCH (TanStack v5 behaviour, not observed).
 
+## 8. Phase 1 — backend changes (F:WHA branch `feature/mobile-business-auth`)
+
+Decisions (2026-10-02): getAuthUser's blocked/deleted rejection on the web path is accepted;
+no `business_type` gating; complete-profile skipped; Inventory dropped; notifications are a
+read-only feed + mark read / mark all read; Feather icons; uploads use expo-file-system `File`
+parts; currency AUD; booking status options come only from the server state machine (§5),
+`/api/bookings/status` for status changes, `/api/bookings/[id]` only for reschedule; the
+calendar pages `/api/calendar/bookings` with `limit=50`.
+
+Done:
+- `server/lib/businessAuth.ts` — `requireBusinessUser()`: bearer or cookie, category
+  `business` (super-admin where the web already allowed it). Bearer rejections:
+  `{ <key>: { message, code } }` with `TOKEN_INVALID` / `ACCOUNT_NOT_FOUND` (401),
+  `ACCOUNT_BLOCKED` / `NOT_BUSINESS` (403). Web rejections keep each route's old body.
+- Every route in §4 marked `session` (except the unused/consumer ones below) now accepts
+  bearer tokens. Fixes: deals/verify field (`uniqueKeys`, case-insensitive);
+  deals/redeem/single ownership; clients/[id] leak; review reply only by the review's
+  business; employees/[id], time-off, shift-overrides GET authenticated + scoped;
+  bookings/verify limited to the booking's customer/business.
+- New: `PATCH /api/notifications` (mark all read → `{ data: { updated }, unread_count: 0 }`);
+  `POST|DELETE /api/mobile/v1/notifications/register-token` (`{ token, platform }` /
+  `{ token }`, mobile envelope); pushes (Expo) on new booking and customer
+  cancel/reschedule, `data: { type: "appointment", related_id }`.
+
+Left unchanged on purpose: `POST /api/bookings` and `POST /api/event/ticket/purchase`
+(consumer), `/api/event/delete/[id]` (disabled server-side), and the routes no screen uses
+(`delete-profile`, `business/profile`, `business/operating-hours` — its POST is still
+**unauthenticated**, `abn`, `businesstype`, `profile-complete-business`, `services/user`).
+
+### TODO (follow-ups)
+- **Push for ticket sales** — no Notification exists for them; needs a new `type` value and
+  a call site where a purchase is finalised (`/api/event/ticket/purchase` POST / webhook).
+- **Push for deal redemptions** — same: new `type` + call sites in `/api/deals/redeem` and
+  `/api/deals/redeem/multiple`.
+- `GET /api/event/verify/[id]` has no ownership check (any business can read any event's
+  attendee list) — not in the approved fix list.
+- Deal verify still requires the deal id (the web main-page Verify sends none) and marks the
+  whole multi-buy redemption verified from one code.
+- `POST /api/business/operating-hours` is unauthenticated (unused by the UI).
+
 ---
 
 # Part 2 — Detailed per-area reports
