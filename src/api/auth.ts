@@ -53,8 +53,7 @@ export async function registerUser(
   form.append("deviceId", deviceId);
   form.append("platform", platform);
   const upload = await prepareImagesForUpload(body.image ? [body.image] : []);
-  // RN FormData file part — typed loosely by React Native's lib.
-  if (upload.files[0]) form.append("image", upload.files[0] as unknown as Blob);
+  if (upload.files[0]) form.append("image", upload.files[0]);
   return apiRequestWithMeta<RegisterResponse>(`${MOBILE_API}/auth/register`, {
     method: "POST",
     auth: false,
@@ -90,9 +89,8 @@ export async function registerBusiness(
   // Resized/re-encoded JPEGs, the whole set under the request-size budget.
   const upload = await prepareImagesForUpload(body.images);
   const [cover, ...rest] = upload.files;
-  // RN FormData file parts — typed loosely by React Native's lib.
-  if (cover) form.append("image", cover as unknown as Blob);
-  rest.forEach((img, i) => form.append(`venue_image_${i}`, img as unknown as Blob));
+  if (cover) form.append("image", cover);
+  rest.forEach((img, i) => form.append(`venue_image_${i}`, img));
   form.append("deviceId", deviceId);
   form.append("platform", platform);
   return apiRequestWithMeta<RegisterResponse>(`${MOBILE_API}/auth/register`, {

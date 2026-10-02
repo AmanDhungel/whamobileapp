@@ -4,10 +4,13 @@ import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { ApiError } from "@/api/errors";
 import type { UploadFile } from "@/api/types";
 
-// Every photo is re-encoded on-device before it goes into a multipart body:
-// full-resolution library photos (iPhone HEIC/JPEG, 3–8 MB each) blow past the
-// backend's request-size limits — 10 MB through the Next proxy locally, 4.5 MB on
-// Vercel in production — and the server then drops the connection mid-upload.
+// FormData file parts must be expo-file-system `File` objects. Since SDK 57 the
+// global fetch is expo/fetch, which rejects React Native-style { uri, name, type }
+// parts ("Unsupported FormDataPart implementation") before anything is sent.
+//
+// Every photo is also re-encoded on-device first: full-resolution library photos
+// (iPhone HEIC/JPEG, 3–8 MB each) blow past the backend's request-size limits —
+// 10 MB through the Next proxy locally, 4.5 MB on Vercel in production.
 
 /** Files budget for one request: well under Vercel's 4.5 MB, leaving room for fields. */
 export const MAX_UPLOAD_BYTES = 3.5 * 1024 * 1024;
@@ -23,17 +26,13 @@ const STEPS = [
 type Step = (typeof STEPS)[number];
 
 export interface PreparedUpload {
-  files: UploadFile[];
+  /** JPEGs (name "<id>.jpg", type "image/jpeg") — append to FormData as they are. */
+  files: File[];
   totalBytes: number;
 }
 
-function jpegName(name: string, index: number): string {
-  const base = name.replace(/\.[^.]*$/, "").replace(/[^\w-]+/g, "_") || `photo-${index + 1}`;
-  return `${base}.jpg`;
-}
-
 /** Resize so the longest side is at most `maxSide`, then save as JPEG. */
-async function encode(file: UploadFile, index: number, step: Step) {
+async function encode(file: UploadFile, step: Step): Promise<File> {
   const context = ImageManipulator.manipulate(file.uri);
   const original = await context.renderAsync();
   const { width, height } = original;
@@ -47,15 +46,12 @@ async function encode(file: UploadFile, index: number, step: Step) {
   const saved = await image.saveAsync({ compress: step.quality, format: SaveFormat.JPEG });
   image.release();
   context.release();
-
-  const bytes = new File(saved.uri).size ?? 0;
-  const part: UploadFile = { uri: saved.uri, name: jpegName(file.name, index), type: "image/jpeg" };
-  return { part, bytes };
+  return new File(saved.uri);
 }
 
 /**
- * Converts picked photos to upload-ready JPEGs (max 1600 px, quality ~0.7), lowering
- * quality/size further only if the set would exceed `maxTotalBytes`.
+ * Converts picked photos to upload-ready JPEG files (max 1600 px, quality ~0.7),
+ * lowering quality/size further only if the set would exceed `maxTotalBytes`.
  */
 export async function prepareImagesForUpload(
   files: UploadFile[],
@@ -67,11 +63,11 @@ export async function prepareImagesForUpload(
   try {
     for (const step of STEPS) {
       // Sequential: each decode of a full-size photo is memory-heavy.
-      const encoded: { part: UploadFile; bytes: number }[] = [];
-      for (const [i, file] of files.entries()) encoded.push(await encode(file, i, step));
+      const encoded: File[] = [];
+      for (const file of files) encoded.push(await encode(file, step));
       result = {
-        files: encoded.map((e) => e.part),
-        totalBytes: encoded.reduce((sum, e) => sum + e.bytes, 0),
+        files: encoded,
+        totalBytes: encoded.reduce((sum, f) => sum + (f.size ?? 0), 0),
       };
       if (__DEV__) {
         console.log(
