@@ -1,11 +1,12 @@
 import { Asset } from "expo-asset";
-import { File } from "expo-file-system";
+import { File, Paths } from "expo-file-system";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import QRCode from "qrcode";
 
 import type { TicketCode } from "@/utils/tickets";
 import { formatPrice } from "@/utils/format";
+import { salesReportCsv, type SalesReport } from "@/utils/salesReport";
 
 // On-device ticket / invoice PDFs. The backend has no PDF endpoint — the website builds
 // these client-side with jsPDF (components/Dashboard/Ticket/TicketDetailPage.tsx and
@@ -221,4 +222,79 @@ export async function shareInvoicePdf(data: InvoicePdfData): Promise<void> {
     `invoice-${safeName(data.invoiceNumber || "ticket")}.pdf`,
     "Download Invoice",
   );
+}
+
+// ─── Event sales report ─────────────────────────────────────────────────────────
+
+/** A4 sales report — the web's jsPDF report: earnings banner + two tables. */
+export async function shareSalesReportPdf(report: SalesReport): Promise<void> {
+  const typeRows = report.ticketTypes
+    .map(
+      (r) =>
+        `<tr><td>${escapeHtml(r.name)}</td><td class="num">${formatPrice(r.price)}</td><td class="num">${r.quantity}</td><td class="num">${r.promoUses}</td><td class="num">${formatPrice(r.discount)}</td><td class="num">${formatPrice(r.revenue)}</td></tr>`,
+    )
+    .join("");
+  const promoRows = report.promoBuyers.length
+    ? report.promoBuyers
+        .map(
+          (b) =>
+            `<tr><td>${escapeHtml(b.buyer)}</td><td>${escapeHtml(b.code)}</td><td>${escapeHtml(b.ticketType)}</td><td class="num">${b.quantity}</td><td class="num">${formatPrice(b.unitPrice)}</td></tr>`,
+        )
+        .join("")
+    : `<tr><td>—</td><td>—</td><td>No promo codes used</td><td></td><td></td></tr>`;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8" />
+  <style>
+    @page { size: A4; margin: 18mm 14mm; }
+    body { font-family: Helvetica, Arial, sans-serif; color: #000; font-size: 10pt; }
+    h1 { font-size: 18pt; margin: 0 0 1mm; }
+    .muted { color: #666; margin: 0 0 1mm; }
+    .banner { background: #051e3a; color: #fff; border-radius: 3mm; padding: 5mm 6mm; margin: 6mm 0; }
+    .banner .label { font-size: 9pt; letter-spacing: 1px; }
+    .banner .value { font-size: 20pt; font-weight: bold; margin: 1mm 0; }
+    .banner .note { font-size: 8pt; opacity: 0.8; }
+    h2 { font-size: 12pt; margin: 6mm 0 2mm; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 8.5pt; color: #666; border-bottom: 1px solid #ccc; padding: 1.5mm 1mm; }
+    td { padding: 1.5mm 1mm; border-bottom: 1px solid #eee; }
+    .num { text-align: right; }
+    tfoot td { font-weight: bold; border-top: 1px solid #ccc; }
+  </style></head><body>
+    <h1>Sales Report</h1>
+    <p class="muted">${escapeHtml(report.title)}</p>
+    <p class="muted">Generated ${escapeHtml(report.generatedAt)}</p>
+    <div class="banner">
+      <div class="label">TOTAL EARNINGS</div>
+      <div class="value">${formatPrice(report.totalEarnings)}</div>
+      <div class="note">Excludes service fee &amp; surcharge</div>
+    </div>
+    <h2>Earnings by Ticket Type</h2>
+    <table>
+      <thead><tr><th>Ticket Type</th><th class="num">Price Per Ticket</th><th class="num">Tickets Sold</th><th class="num">Promo Uses</th><th class="num">Discount Given</th><th class="num">Earnings</th></tr></thead>
+      <tbody>${typeRows}</tbody>
+      <tfoot><tr><td>Total</td><td></td><td class="num">${report.totals.quantity}</td><td class="num">${report.totals.promoUses}</td><td class="num">${formatPrice(report.totals.discount)}</td><td class="num">${formatPrice(report.totalEarnings)}</td></tr></tfoot>
+    </table>
+    <h2>Buyers Who Used a Promo Code</h2>
+    <table>
+      <thead><tr><th>Buyer</th><th>Promo Code</th><th>Ticket Type</th><th class="num">Quantity</th><th class="num">Price</th></tr></thead>
+      <tbody>${promoRows}</tbody>
+    </table>
+  </body></html>`;
+
+  await printAndShare(html, A4_PAGE, `${report.fileBase}.pdf`, "Sales Report");
+}
+
+/** CSV export, shared through the OS sheet (Save to Files, email…). */
+export async function shareSalesReportCsv(report: SalesReport): Promise<void> {
+  const file = new File(Paths.cache, `${report.fileBase}.csv`);
+  if (file.exists) file.delete();
+  file.create();
+  file.write(salesReportCsv(report));
+  if (!(await Sharing.isAvailableAsync()))
+    throw new Error("Sharing isn't available on this device.");
+  await Sharing.shareAsync(file.uri, {
+    mimeType: "text/csv",
+    UTI: "public.comma-separated-values-text",
+    dialogTitle: "Sales Report",
+  });
 }

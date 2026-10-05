@@ -57,6 +57,10 @@ export const sizes = {
   detailHeroHeight: 280,
   galleryThumb: 104,
   staticMapHeight: 180,
+  /** Business overview 7-day chart. */
+  chartHeight: 140,
+  /** QR scanner viewfinder (square). */
+  scannerFrame: 240,
   /** LocationPicker map height, as a fraction of the window height. */
   mapPickerHeightRatio: 0.4,
   mapPin: 34,

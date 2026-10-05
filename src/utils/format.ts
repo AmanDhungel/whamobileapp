@@ -151,3 +151,30 @@ export function formatCountdown(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
   return `${pad2(Math.floor(s / 60))}:${pad2(s % 60)}`;
 }
+
+/** Any date-time value → its clock time, "10:30 AM". */
+function clockTime(d: Date): string {
+  const h12 = d.getHours() % 12 === 0 ? 12 : d.getHours() % 12;
+  return `${h12}:${pad2(d.getMinutes())} ${d.getHours() < 12 ? "AM" : "PM"}`;
+}
+
+/** ISO date-time → "Sat 04 Oct · 10:30 AM" (booking rows). */
+export function formatDateTimeShort(value?: string | null): string | null {
+  const d = parseDate(value);
+  if (!d) return null;
+  return `${WEEKDAYS[d.getDay()]} ${pad2(d.getDate())} ${MONTHS[d.getMonth()]} · ${clockTime(d)}`;
+}
+
+/** ISO date-time → "04 Oct 2025, 10:30 AM" (orders, check-in times). */
+export function formatDateTime(value?: string | null): string | null {
+  const d = parseDate(value);
+  if (!d) return null;
+  return `${pad2(d.getDate())} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${clockTime(d)}`;
+}
+
+/** ISO or "YYYY-MM-DD" → { day: "04", month: "Oct" } (date badges). */
+export function dayAndMonth(value?: string | null): { day: string; month: string } | null {
+  const d = parseDate(value);
+  if (!d) return null;
+  return { day: pad2(d.getDate()), month: MONTHS[d.getMonth()] ?? "" };
+}

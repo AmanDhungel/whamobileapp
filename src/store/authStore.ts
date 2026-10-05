@@ -55,7 +55,12 @@ const FORCED_LOGOUT_MESSAGES: Record<AuthFailureReason, string> = {
 };
 
 /** Queries holding the signed-in user's own data — dropped on logout. */
-const PRIVATE_QUERY_KEYS = [queryKeys.favorites, queryKeys.tickets, queryKeys.registrations];
+const PRIVATE_QUERY_KEYS = [
+  queryKeys.favorites,
+  queryKeys.tickets,
+  queryKeys.registrations,
+  queryKeys.biz,
+];
 
 function dropPrivateQueries() {
   for (const queryKey of PRIVATE_QUERY_KEYS) queryClient.removeQueries({ queryKey });

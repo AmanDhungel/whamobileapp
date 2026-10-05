@@ -15,4 +15,13 @@ export const queryKeys = {
   favorites: ["favorites"] as const,
   tickets: ["tickets"] as const,
   registrations: ["registrations"] as const,
+
+  // Business dashboard — one "biz" prefix (not "business": that's the public business
+  // page) so logout can drop all of it.
+  biz: ["biz"] as const,
+  bizDashboard: ["biz", "dashboard"] as const,
+  bizEvents: ["biz", "events"] as const,
+  bizEventForm: (id: string) => ["biz", "event-form", id] as const,
+  bizAttendees: (eventId: string) => ["biz", "attendees", eventId] as const,
+  bizPurchases: (eventId: string) => ["biz", "purchases", eventId] as const,
 };

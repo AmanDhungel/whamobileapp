@@ -41,18 +41,30 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-const KNOWN_CODES: readonly MobileErrorCode[] = [
-  "ACCOUNT_BLOCKED",
-  "ACCOUNT_NOT_FOUND",
-  "TOKEN_INVALID",
-];
+/** A `{ message, code }` object — the coded error shape, wherever it is nested. */
+function codedError(value: unknown): { message: string; code: ApiErrorCode | null } | null {
+  if (!isRecord(value) || typeof value.message !== "string") return null;
+  const code = typeof value.code === "string" && value.code ? value.code : null;
+  return { message: value.message, code };
+}
+
+/** Zod issue arrays some legacy routes return as `{ error: ZodIssue[] }`. */
+function issuesMessage(value: unknown): string | null {
+  if (!Array.isArray(value)) return null;
+  const messages = value
+    .map((issue) => (isRecord(issue) && typeof issue.message === "string" ? issue.message : null))
+    .filter((m): m is string => !!m);
+  return messages.length ? messages.join("\n") : null;
+}
 
 /**
  * Extracts a human message + optional code from any error body this backend produces.
  * Always JSON-parses first (the web client's recurring raw-`{"error":...}` bug —
  * 12-mobile-gap-report.md §11). Handles, in order:
  *   - mobile envelope  { data:null, error:{ message, code }, meta }
+ *   - bearer rejection { error|message: { message, code } }  (TOKEN_INVALID, NOT_BUSINESS…)
  *   - legacy           { error: "...", code? }     e.g. /api/event/ticket/purchase
+ *   - legacy           { error: ZodIssue[] }       e.g. /api/event/edit/[id]
  *   - legacy           { message: "..." }          e.g. /api/auth/send-verification-code
  *   - raw text, then a generic fallback.
  */
@@ -64,10 +76,10 @@ export function parseErrorBody(
 
   if (isRecord(parsed)) {
     const { error, message } = parsed;
-    if (isRecord(error) && typeof error.message === "string") {
-      const code = KNOWN_CODES.find((c) => c === error.code) ?? null;
-      return { message: error.message, code, body: parsed };
-    }
+    const coded = codedError(error) ?? codedError(message);
+    if (coded) return { ...coded, body: parsed };
+    const issues = issuesMessage(error);
+    if (issues) return { message: issues, code: null, body: parsed };
     // Legacy routes may add a top-level code, e.g. { error, code: "GUEST_INFO_REQUIRED" }.
     const legacyCode = typeof parsed.code === "string" && parsed.code ? parsed.code : null;
     if (typeof error === "string" && error)

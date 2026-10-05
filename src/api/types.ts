@@ -5,7 +5,12 @@
 // ─── Envelopes ──────────────────────────────────────────────────────────────────
 
 /** Every /api/mobile/v1/* route (server/lib/mobileResponse.ts). */
-export type MobileErrorCode = "ACCOUNT_BLOCKED" | "ACCOUNT_NOT_FOUND" | "TOKEN_INVALID";
+export type MobileErrorCode =
+  | "ACCOUNT_BLOCKED"
+  | "ACCOUNT_NOT_FOUND"
+  | "TOKEN_INVALID"
+  // Business routes (server/lib/businessAuth.ts) — a signed-in non-business account.
+  | "NOT_BUSINESS";
 
 export interface MobileEnvelope<T> {
   data: T | null;
@@ -698,4 +703,128 @@ export interface EventRegistration {
   uniqueKey: string;
   status: TicketStatus;
   createdAt?: ISODateString;
+}
+
+// ─── Business dashboard (docs/mobile/13-business-dashboard.md) ─────────────────
+// Legacy routes (no mobile envelope) — bearer-enabled via server/lib/businessAuth.ts.
+
+/** Server state machine: app/api/bookings/status/route.ts. */
+export type BookingStatus =
+  | "pending"
+  | "confirmed"
+  | "rescheduled"
+  | "arrived"
+  | "completed"
+  | "cancelled"
+  | "no_show"
+  | "refunded";
+
+export type BookingPaymentStatus = "unpaid" | "pending" | "paid" | "refunded" | "failed";
+
+/** A booking as the business dashboard routes return it (user + service populated). */
+export interface BusinessBooking {
+  _id: ObjectId;
+  business_id: string;
+  user_id: { _id: ObjectId; name?: string; email?: string } | null;
+  service_id: { _id: ObjectId; name?: string; base_price?: number; base_duration?: number } | null;
+  /** Not populated by /api/business-dashboard. */
+  employee_id: ObjectId | { _id: ObjectId; full_name?: string } | null;
+  start_time: ISODateString;
+  end_time: ISODateString;
+  duration: number;
+  total_price: number;
+  currency?: string;
+  payment_status: BookingPaymentStatus;
+  status: BookingStatus;
+  notes?: string;
+  inventory_quantity?: number | null;
+  created_at?: ISODateString;
+}
+
+export interface DailyStat {
+  /** "YYYY-MM-DD" (UTC day on the server). */
+  date: DateOnlyString;
+  appointments: number;
+  /** Paid bookings only. */
+  sales: number;
+}
+
+/** GET /api/business-dashboard → { data }. dailyStats is always 7 rows. */
+export interface BusinessDashboardData {
+  dailyStats: DailyStat[];
+  totalAppointments: number;
+  totalSales: number;
+  /** Last 7 days, newest first, max 10. */
+  recentBookings: BusinessBooking[];
+  /** Next 7 days, pending/confirmed, max 10. */
+  upcomingBookings: BusinessBooking[];
+  /** Today (server local time), pending/confirmed. */
+  todayBookings: BusinessBooking[];
+}
+
+export interface EventPromoCode {
+  _id?: ObjectId;
+  code?: string;
+  discount_percentage?: number | null;
+  limit?: number | null;
+  used?: number | null;
+  /** Option NAMES (not ids); empty = all options. */
+  applicable_options?: string[];
+}
+
+/**
+ * GET /api/event (my events — no promo codes) and
+ * GET /api/event/single-event-for-form/[id] (with promo codes, user populated).
+ */
+export interface BusinessEvent extends EventDetail {
+  promo_codes?: EventPromoCode[];
+  archived?: boolean;
+  updatedAt?: ISODateString;
+}
+
+/** GET /api/event/verify/[id] → { data } — registrations first, then paid codes. */
+export interface EventAttendee {
+  /** Redemption id, or `${purchaseId}-${code}` for paid tickets. */
+  _id: string;
+  user: { _id: ObjectId; name?: string } | null;
+  uniqueKey: string;
+  /** "General" for registrations, the option name for paid tickets. */
+  ticketType: string;
+  status: TicketStatus;
+  verifiedAt: ISODateString | null;
+}
+
+/** GET /api/event/ticket/purchase?eventId= → { data } (the business's orders). */
+export interface BusinessTicketPurchase {
+  _id: ObjectId;
+  event: BusinessEvent | ObjectId;
+  user: { _id: ObjectId; name?: string; email?: string } | null;
+  items: {
+    optionId: ObjectId;
+    optionName: string;
+    quantity: number;
+    unitPrice: number;
+    uniqueKeys: string[];
+  }[];
+  uniqueKeys: string[];
+  verifiedKeys: string[];
+  promoCode?: string;
+  invoiceNumber: string;
+  /** Ticket revenue — excludes fees. */
+  ticketTotal: number;
+  serviceFee: number;
+  surcharge: number;
+  totalAmount: number;
+  /** "verified" only once every code is checked in. */
+  status: TicketStatus;
+  verifiedAt?: ISODateString;
+  createdAt: ISODateString;
+}
+
+/** POST /api/event/verify → 200. */
+export interface VerifyTicketResponse {
+  success: true;
+  /** "Ticket verified successfully!" */
+  message: string;
+  data: { attendee?: string; ticketType?: string; verifiedAt: ISODateString };
 }
