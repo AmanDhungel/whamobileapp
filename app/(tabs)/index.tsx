@@ -89,6 +89,7 @@ export default function HomeScreen() {
           source={require("../../assets/images/logo.png")}
           style={styles.logo}
           contentFit="contain"
+          contentPosition="left"
           accessibilityLabel="WH Australia"
         />
         <View style={styles.headerActions}>
@@ -96,6 +97,8 @@ export default function HomeScreen() {
             label={city ?? "Australia"}
             icon="map-pin"
             dropdown
+            compact
+            style={styles.cityChip}
             onPress={() => setCitySheet(true)}
           />
           {area === "public" && (
@@ -327,8 +330,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing[6],
     paddingVertical: theme.spacing[3],
   },
-  logo: { width: theme.sizes.logoWidth, height: theme.sizes.logoHeight },
-  headerActions: { flexDirection: "row", alignItems: "center", gap: theme.spacing[2] },
+  // Sized from the image's own aspect ratio so its left edge is the content edge
+  // (a wider box with contentFit "contain" centred it, leaving a gap on the left).
+  logo: { height: theme.sizes.logoHeight, aspectRatio: theme.sizes.logoAspectRatio },
+  // Takes whatever width the logo leaves; the city pill gives way first.
+  headerActions: {
+    flexShrink: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: theme.spacing[2],
+  },
+  cityChip: { flexShrink: 1 },
   section: {
     gap: theme.spacing[3],
     paddingHorizontal: theme.spacing[6],

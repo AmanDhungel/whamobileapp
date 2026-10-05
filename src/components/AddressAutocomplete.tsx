@@ -34,6 +34,18 @@ export function AddressAutocomplete({
   const [query, setQuery] = useState(value);
   const [picked, setPicked] = useState(!!value);
   const [touched, setTouched] = useState(false);
+
+  // The parent can set the address too (e.g. LocationPicker's "Use this address"):
+  // adopt it as a picked address. Done during render, React's pattern for syncing
+  // state to a changed prop.
+  const [lastValue, setLastValue] = useState(value);
+  if (value !== lastValue) {
+    setLastValue(value);
+    if (value && value !== query) {
+      setQuery(value);
+      setPicked(true);
+    }
+  }
   const search = useAddressSearch(query, !picked);
 
   const onChangeText = (text: string) => {

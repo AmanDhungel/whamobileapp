@@ -1,3 +1,5 @@
+import { prepareImagesForUpload } from "@/services/imageUpload";
+
 import { apiRequest } from "./client";
 import type {
   EditProfileRequest,
@@ -33,13 +35,14 @@ export async function editProfile(body: EditProfileRequest): Promise<void> {
  * user.image server-side. Cookie-only today → `lenient` (see editProfile).
  */
 export async function uploadProfilePic(file: UploadFile): Promise<string> {
+  const upload = await prepareImagesForUpload([file]);
   const form = new FormData();
-  // RN FormData file part — typed loosely by React Native's lib.
-  form.append("file", file as unknown as Blob);
+  if (upload.files[0]) form.append("file", upload.files[0]);
   const res = await apiRequest<UploadProfilePicResponse>("/api/upload-profile-pic", {
     method: "POST",
     body: form,
     authMode: "lenient",
+    uploadBytes: upload.totalBytes,
   });
   return res.data.url;
 }

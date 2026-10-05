@@ -38,8 +38,9 @@ export const sizes = {
   choiceIcon: 48,
   tabIndicatorWidth: 24,
   tabIndicatorHeight: 2,
-  logoWidth: 140,
   logoHeight: 38,
+  /** assets/images/logo.png is 1563×825 (width / height). */
+  logoAspectRatio: 1563 / 825,
   heroHeight: 220,
   /** wha-auth.png is 1080×1350 — shown uncropped (width / height). */
   authHeroAspectRatio: 1080 / 1350,
@@ -56,6 +57,8 @@ export const sizes = {
   detailHeroHeight: 280,
   galleryThumb: 104,
   staticMapHeight: 180,
+  /** LocationPicker map height, as a fraction of the window height. */
+  mapPickerHeightRatio: 0.4,
   mapPin: 34,
   thumbSm: 48,
   thumbMd: 64,

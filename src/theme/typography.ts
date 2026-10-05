@@ -54,6 +54,8 @@ export const textVariants = {
   buttonSm: variant(fontFamily.heading, fontSize.sm, lineHeight.tight, 0),
   tabLabel: variant(fontFamily.heading, fontSize["2xs"], lineHeight.tight, letterSpacing.base),
   input: variant(fontFamily.body, fontSize.base, lineHeight.snug, 0),
+  /** Google branding: Roboto Medium 14 / 20. */
+  googleButton: variant(fontFamily.googleButton, fontSize.sm, 20 / 14, 0),
   code: variant(fontFamily.heading, fontSize["2xl"], lineHeight.tight, 0),
 } satisfies Record<string, TextStyle>;
 

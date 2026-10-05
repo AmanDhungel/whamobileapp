@@ -1,6 +1,7 @@
 import type { MobileErrorCode } from "./types";
 
 export const NETWORK_ERROR_MESSAGE = "Can't reach the server. Check your connection.";
+export const UPLOAD_FAILED_MESSAGE = "Upload failed — check your connection and try again";
 export const GENERIC_ERROR_MESSAGE = "Something went wrong. Please try again.";
 
 /**

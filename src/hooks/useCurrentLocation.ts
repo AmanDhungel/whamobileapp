@@ -6,11 +6,22 @@ export interface Coords {
   lng: number;
 }
 
+export interface CurrentLocationMessages {
+  denied: string;
+  failed: string;
+}
+
+const SEARCH_MESSAGES: CurrentLocationMessages = {
+  denied: "Location permission is off. Choose a city instead, or enable it in Settings.",
+  failed: "Couldn't get your location. Please choose a city instead.",
+};
+
 /**
- * One-shot foreground location for "Near me" searches. Returns null (with an error
- * message) when permission is denied or the position can't be read.
+ * One-shot foreground location (default copy: "Near me" searches). Returns null (with
+ * an error message) when permission is denied or the position can't be read.
  */
-export function useCurrentLocation() {
+export function useCurrentLocation(messages: CurrentLocationMessages = SEARCH_MESSAGES) {
+  const { denied, failed } = messages;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,7 +31,7 @@ export function useCurrentLocation() {
     try {
       const { granted } = await Location.requestForegroundPermissionsAsync();
       if (!granted) {
-        setError("Location permission is off. Choose a city instead, or enable it in Settings.");
+        setError(denied);
         return null;
       }
       const position =
@@ -28,12 +39,12 @@ export function useCurrentLocation() {
         (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
       return { lat: position.coords.latitude, lng: position.coords.longitude };
     } catch {
-      setError("Couldn't get your location. Please choose a city instead.");
+      setError(failed);
       return null;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [denied, failed]);
 
   return { locate, loading, error };
 }

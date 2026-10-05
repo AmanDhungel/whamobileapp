@@ -20,6 +20,7 @@ export default function BusinessDashboardScreen() {
         source={require("../../assets/images/logo.png")}
         style={styles.logo}
         contentFit="contain"
+        contentPosition="left"
         accessibilityLabel="WH Australia"
       />
 
@@ -60,8 +61,9 @@ export default function BusinessDashboardScreen() {
 
 const styles = StyleSheet.create({
   logo: {
-    width: theme.sizes.logoWidth,
     height: theme.sizes.logoHeight,
+    aspectRatio: theme.sizes.logoAspectRatio,
+    alignSelf: "flex-start",
     marginBottom: theme.spacing[6],
   },
   identity: { flexDirection: "row", alignItems: "center", gap: theme.spacing[4] },

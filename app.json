@@ -51,7 +51,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location to find businesses and events near you."
+          "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location to find businesses and events near you, and to place your business on the map."
         }
       ],
       [
@@ -65,6 +65,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e3be23df-d510-4c9d-a6b2-6061cfdc1325"
+      }
     }
   }
 }

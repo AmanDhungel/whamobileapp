@@ -1,14 +1,14 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { StyleSheet, View } from "react-native";
 
 import { getErrorMessage } from "@/api/errors";
 import {
-  AddressAutocomplete,
   Avatar,
   Button,
   Card,
+  LocationPicker,
   LoginPrompt,
   Screen,
   ScreenHeader,
@@ -66,8 +66,18 @@ export default function EditProfileScreen() {
   });
   const contactForm = useForm<ContactDetailsValues>({
     resolver: zodResolver(contactDetailsSchema),
-    defaultValues: { phone_number: user?.phone_number ?? "", location: user?.location ?? "" },
+    defaultValues: {
+      phone_number: user?.phone_number ?? "",
+      // The mobile user payload has no coordinates yet, so the map starts empty until
+      // an address is picked or "Use my current location" is tapped.
+      location: user?.location ?? "",
+    },
   });
+  const [contactLocation, contactLatitude, contactLongitude] = useWatch({
+    control: contactForm.control,
+    name: ["location", "latitude", "longitude"],
+  });
+  const contactErrors = contactForm.formState.errors;
 
   if (!isCustomer) {
     return (
@@ -120,7 +130,9 @@ export default function EditProfileScreen() {
     const body: ContactDetailsValues = {};
     const phone = values.phone_number?.trim();
     if (phone && phone !== (user?.phone_number ?? "")) body.phone_number = phone;
-    if (values.location && values.location !== (user?.location ?? "")) {
+    const addressChanged = values.location !== (user?.location ?? "");
+    const pinPlaced = values.latitude !== undefined && values.longitude !== undefined;
+    if (values.location && (addressChanged || pinPlaced)) {
       body.location = values.location;
       body.latitude = values.latitude;
       body.longitude = values.longitude;
@@ -211,13 +223,20 @@ export default function EditProfileScreen() {
               />
             )}
           />
-          <AddressAutocomplete
+          <LocationPicker
             label="Address"
-            value={user?.location ?? ""}
-            onSelect={(s) => {
-              contactForm.setValue("location", s?.label ?? "");
-              contactForm.setValue("latitude", s?.latitude);
-              contactForm.setValue("longitude", s?.longitude);
+            value={{
+              address: contactLocation ?? "",
+              latitude: contactLatitude,
+              longitude: contactLongitude,
+            }}
+            coordinatesError={contactErrors.latitude?.message ?? contactErrors.longitude?.message}
+            onChange={(patch) => {
+              if (patch.address !== undefined) contactForm.setValue("location", patch.address);
+              if (patch.latitude !== undefined && patch.longitude !== undefined) {
+                contactForm.setValue("latitude", patch.latitude, { shouldValidate: true });
+                contactForm.setValue("longitude", patch.longitude, { shouldValidate: true });
+              }
             }}
           />
           {contactUnavailable && <Unavailable />}
