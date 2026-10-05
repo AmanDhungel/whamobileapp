@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { Controller, useFieldArray, useForm, useWatch, type FieldErrors } from "react-hook-form";
 import { Pressable, StyleSheet, View } from "react-native";
 
-import { saveEvent } from "@/api/businessEvents";
 import { getErrorMessage } from "@/api/errors";
 import {
   Button,
@@ -36,7 +35,6 @@ import {
   MAX_PROMO_CODES,
   MAX_TICKET_OPTIONS,
   PRICE_CATEGORY_OPTIONS,
-  buildEventFormData,
   emptyEventForm,
   eventFormSchema,
   eventToForm,
@@ -109,7 +107,6 @@ function EventForm({
   const isEdit = !!id;
   const save = useSaveEvent(id);
   const [step, setStep] = useState<EventFormStep>("basic");
-  const [finishing, setFinishing] = useState(false);
 
   const form = useForm<EventFormValues>({
     resolver: zodResolver(eventFormSchema),
@@ -160,25 +157,6 @@ function EventForm({
     }
     try {
       const saved = await save.mutateAsync(values);
-      // POST /api/event ignores category_name (web bug) — store it with a follow-up
-      // update so a custom "Others" name isn't lost.
-      if (!isEdit && values.category === "Others" && values.category_name.trim() && saved.image) {
-        setFinishing(true);
-        try {
-          const { form: body, uploadBytes } = await buildEventFormData({
-            ...values,
-            image: saved.image,
-          });
-          await saveEvent(body, { id: String(saved._id), uploadBytes });
-        } catch {
-          showToast({
-            type: "info",
-            message: "Event created, but the category name wasn't saved. Edit the event to add it.",
-          });
-        } finally {
-          setFinishing(false);
-        }
-      }
       showToast({
         type: "success",
         message: isEdit ? "Event updated successfully" : "Event created successfully!",
@@ -195,7 +173,7 @@ function EventForm({
   };
 
   const submit = handleSubmit((v) => void onValid(v), onInvalid);
-  const busy = save.isPending || finishing;
+  const busy = save.isPending;
   const minEnd = [dateFrom, isEdit ? originalEnd : ""].filter(Boolean).sort().pop();
 
   const nav = (

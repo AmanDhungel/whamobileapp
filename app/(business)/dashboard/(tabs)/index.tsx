@@ -3,10 +3,12 @@ import { RefreshControl, StyleSheet, View } from "react-native";
 
 import type { BusinessBooking } from "@/api/types";
 import {
+  Avatar,
   BusinessBookingRow,
   Card,
   CardSkeleton,
   DailyChart,
+  employeeName,
   ErrorState,
   Grid,
   KpiTile,
@@ -22,12 +24,12 @@ import { formatDayMonth, formatPrice } from "@/utils/format";
 
 type ChartSeries = "sales" | "appointments";
 
-/** Top services by bookings in the last 7 days (web derives it the same way). */
-function topServices(bookings: BusinessBooking[]) {
+/** Top services / team members by bookings in the last 7 days (web derives them the same way). */
+function topBy(bookings: BusinessBooking[], nameOf: (b: BusinessBooking) => string | null) {
   const counts = new Map<string, number>();
   for (const b of bookings) {
-    const name = b.service_id?.name || "Service";
-    counts.set(name, (counts.get(name) ?? 0) + 1);
+    const name = nameOf(b);
+    if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
   }
   return [...counts]
     .map(([name, count]) => ({ name, count }))
@@ -61,7 +63,14 @@ export default function BusinessOverviewScreen() {
       })),
     [data?.dailyStats, series],
   );
-  const services = useMemo(() => topServices(data?.recentBookings ?? []), [data?.recentBookings]);
+  const services = useMemo(
+    () => topBy(data?.recentBookings ?? [], (b) => b.service_id?.name || "Service"),
+    [data?.recentBookings],
+  );
+  const team = useMemo(
+    () => topBy(data?.recentBookings ?? [], employeeName),
+    [data?.recentBookings],
+  );
 
   const kpis = data
     ? [
@@ -184,25 +193,41 @@ export default function BusinessOverviewScreen() {
                 Bookings in the last 7 days
               </Text>
             </View>
-            {services.length === 0 ? (
-              <Text variant="bodySm" color="mutedForeground">
-                No bookings yet.
+            <RankList rows={services} />
+          </Card>
+
+          <Card style={styles.card}>
+            <View>
+              <Text variant="title">Top team member</Text>
+              <Text variant="caption" color="mutedForeground">
+                Bookings in the last 7 days
               </Text>
-            ) : (
-              services.map((s) => (
-                <View key={s.name} style={styles.serviceRow}>
-                  <Text variant="bodySm" style={styles.flex} numberOfLines={1}>
-                    {s.name}
-                  </Text>
-                  <Text variant="label">{s.count}</Text>
-                </View>
-              ))
-            )}
+            </View>
+            <RankList rows={team} avatar />
           </Card>
         </View>
       ) : null}
     </Screen>
   );
+}
+
+function RankList({ rows, avatar }: { rows: { name: string; count: number }[]; avatar?: boolean }) {
+  if (rows.length === 0) {
+    return (
+      <Text variant="bodySm" color="mutedForeground">
+        No bookings yet.
+      </Text>
+    );
+  }
+  return rows.map((r) => (
+    <View key={r.name} style={styles.serviceRow}>
+      {avatar && <Avatar name={r.name} size={theme.sizes.avatarSm} />}
+      <Text variant="bodySm" style={styles.flex} numberOfLines={1}>
+        {r.name}
+      </Text>
+      <Text variant="label">{r.count}</Text>
+    </View>
+  ));
 }
 
 function BookingList({

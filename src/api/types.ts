@@ -727,7 +727,7 @@ export interface BusinessBooking {
   business_id: string;
   user_id: { _id: ObjectId; name?: string; email?: string } | null;
   service_id: { _id: ObjectId; name?: string; base_price?: number; base_duration?: number } | null;
-  /** Not populated by /api/business-dashboard. */
+  /** Populated (full_name) by /api/business-dashboard; null for resource bookings. */
   employee_id: ObjectId | { _id: ObjectId; full_name?: string } | null;
   start_time: ISODateString;
   end_time: ISODateString;

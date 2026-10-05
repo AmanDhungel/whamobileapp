@@ -8,6 +8,12 @@ import { dayAndMonth, formatDateTimeShort, formatDuration, formatPrice } from "@
 import { Badge } from "../Badge";
 import { Text } from "../Text";
 
+/** The populated staff member's name, if any. */
+export function employeeName(booking: BusinessBooking): string | null {
+  const e = booking.employee_id;
+  return e && typeof e === "object" ? e.full_name || null : null;
+}
+
 export interface BusinessBookingRowProps {
   booking: BusinessBooking;
   onPress?: () => void;
@@ -18,6 +24,7 @@ export function BusinessBookingRow({ booking, onPress }: BusinessBookingRowProps
   const t = useTheme();
   const date = dayAndMonth(booking.start_time);
   const customer = booking.user_id?.name || booking.user_id?.email;
+  const staff = employeeName(booking);
   const meta = [formatDateTimeShort(booking.start_time), formatDuration(booking.duration)]
     .filter(Boolean)
     .join(" · ");
@@ -41,9 +48,9 @@ export function BusinessBookingRow({ booking, onPress }: BusinessBookingRowProps
         <Text variant="label" numberOfLines={1}>
           {booking.service_id?.name || "Service"}
         </Text>
-        {!!customer && (
+        {(!!customer || !!staff) && (
           <Text variant="caption" color="mutedForeground" numberOfLines={1}>
-            {customer}
+            {[customer, staff && `with ${staff}`].filter(Boolean).join(" · ")}
           </Text>
         )}
         <Text variant="caption" color="mutedForeground" numberOfLines={1}>
