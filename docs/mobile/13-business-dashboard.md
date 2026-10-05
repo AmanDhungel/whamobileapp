@@ -265,22 +265,32 @@ Done:
   `POST|DELETE /api/mobile/v1/notifications/register-token` (`{ token, platform }` /
   `{ token }`, mobile envelope); pushes (Expo) on new booking and customer
   cancel/reschedule, `data: { type: "appointment", related_id }`.
+- Also fixed (2026-10-05): `GET /api/event/verify/[id]` (attendees) only for the event's
+  business or super-admin (else 404 "Event not found"); `/api/business/operating-hours`
+  GET/POST require a signed-in business and POST ignores `body.business_id`.
+- Tests: `docs/mobile/business-auth-matrix.mjs` (no auth / junk token, 64/64) and
+  `docs/mobile/business-auth-e2e.mjs` (wha_test only: real bearer + real web cookie on every
+  route, customer → 403 everywhere, business B isolated from A, every fix, push — 167/167).
+  Branch pushed to `origin` (sunyaversetech/WHA), not merged.
 
 Left unchanged on purpose: `POST /api/bookings` and `POST /api/event/ticket/purchase`
 (consumer), `/api/event/delete/[id]` (disabled server-side), and the routes no screen uses
-(`delete-profile`, `business/profile`, `business/operating-hours` — its POST is still
-**unauthenticated**, `abn`, `businesstype`, `profile-complete-business`, `services/user`).
+(`delete-profile`, `business/profile`, `abn`, `businesstype`, `profile-complete-business`,
+`services/user`).
 
 ### TODO (follow-ups)
 - **Push for ticket sales** — no Notification exists for them; needs a new `type` value and
   a call site where a purchase is finalised (`/api/event/ticket/purchase` POST / webhook).
 - **Push for deal redemptions** — same: new `type` + call sites in `/api/deals/redeem` and
   `/api/deals/redeem/multiple`.
-- `GET /api/event/verify/[id]` has no ownership check (any business can read any event's
-  attendee list) — not in the approved fix list.
-- Deal verify still requires the deal id (the web main-page Verify sends none) and marks the
-  whole multi-buy redemption verified from one code.
-- `POST /api/business/operating-hours` is unauthenticated (unused by the UI).
+- **Website "Verify Deal" button** on `/dashboard/deals` sends no deal id, so the server
+  always answers 403 "This code does not belong to this deal." Left for later; the app
+  verifies codes from inside a deal (decision 2026-10-05). Verify also marks the whole
+  multi-buy redemption verified from one code.
+- **Archiving an event without coordinates 500s** ("Can't extract geo keys"): the Event
+  schema defaults `geo.type = "Point"` with no coordinates and the 2dsphere index rejects it
+  on `save()`; only the pre-save hook sets `geo` when lat/lng exist. Affects location-TBA
+  events on web and app alike (pre-existing).
 
 ---
 
